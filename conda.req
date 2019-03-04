@@ -1,0 +1,7 @@
+# Conda-Based Requirements: these can be installed by running:
+# 'conda install --file conda.req'
+scikit-learn
+matplotlib
+pandas
+numpy
+
