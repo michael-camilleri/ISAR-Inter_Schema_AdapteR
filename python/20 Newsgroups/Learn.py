@@ -2,6 +2,7 @@
 from pandas.api.types import CategoricalDtype as CDType
 import pandas as pd
 import numpy as np
+import argparse
 import sys
 import os
 
@@ -11,33 +12,46 @@ from sklearn.naive_bayes import MultinomialNB
 
 # Load own packages
 sys.path.append('..')
-# Default Parameters
+from Models import MultISAR
 
-DATA_TYPE = 'BOW'
-SIM_NUMBER = 'D'
-AUG_PERCENT = [0.01, 0.02, 0.04, 0.06, 0.08, 0.1, 0.15, 0.2, 0.3, 0.4, 0.5, 0.6, 0.8, 1.0]
-EXACT_PERCENT = 0.2
-SMOOTH_PARAMS = 0.005
+# Default Parameters
+DEFAULTS = \
+    {'Source': '20NG_BOW',   # Source of the Data
+     'Output': 'Results',    # Result file
+     'Random': '0',          # Random Seed offset
+     'Numbers':  ['0', '30'],  # Range: start index, number of runs
+     'FullSpec': '0.02',     # Proportion of Fully-Specified Labels
+     'Alpha': '0.005',       # Laplace Smoothing Parameter for counts
+     'Steps': ['0.01', '0.02', '0.04', '0.06', '0.08', '0.1', '0.15', '0.2', '0.3', '0.4', '0.5', '0.6', '0.8', '1.0']}
 
 
 if __name__ == '__main__':
 
-    if len(sys.argv) > 1:
-        sys.path.append('/afs/inf.ed.ac.uk/user/s12/s1238640/Documents/Code/M.Sc. Project/python')
-        Const = {'Data.Clean': '/afs/inf.ed.ac.uk/user/s12/s1238640/Documents/Data/Source',
-                 'Results.Scratch': '/afs/inf.ed.ac.uk/user/s12/s1238640/Documents/Data/Results'}
-        RUN_OFFSET = int(sys.argv[1])
-        RUN_LENGTH = int(sys.argv[2])
+    _arg_parse = argparse.ArgumentParser(description='Train a Multinomial Class-Conditional ISAR')
+    _arg_parse.add_argument('-s', '--source', help='Source file for Data: default is {}'.format(DEFAULTS['Source']),
+                            default=DEFAULTS['Source'])
+    _arg_parse.add_argument('-o', '--output', help='Output Result file: default is {}'.format(DEFAULTS['Output']),
+                            default=DEFAULTS['Output'])
+    _arg_parse.add_argument('-r', '--random', help='Seed (offset) for all Random States: ensures repeatibility. '
+                                                   'Defaults to {}'.format(DEFAULTS['Random']),
+                            default=DEFAULTS['Random'])
+    _arg_parse.add_argument('-n', '--numbers', help='Range of Runs to simulate: tuple containing the start index and '
+                                                    'number of runs. Defaults to {}/{}'.format(*DEFAULTS['Numbers']),
+                            nargs=2, default=DEFAULTS['Numbers'])
+    _arg_parse.add_argument('-f', '--fullspec', help='Proportion of the data to have fully-specified labels. Default '
+                                                     'is {}'.format(DEFAULTS['FullSpec']), default=DEFAULTS['FullSpec'])
+    _arg_parse.add_argument('-a', '--alpha', help='Laplace Smoothing Parameter for Multinomial Distribution: Defaults '
+                                                  'to {}'.format(DEFAULTS['Alpha']), default=DEFAULTS['Alpha'])
+    _arg_parse.add_argument('-s', '--steps', help='Steps at which to add the remaining data.', nargs='*',
+                            default=DEFAULTS['Steps'])
+    _args = _arg_parse.parse_args()
 
-    else:
-        from Scripts.Constants import Const
-        RUN_OFFSET = 0
-        RUN_LENGTH = 30
+
 
     # Load own packages
     from Tools.Common import skext
     from Tools.Simulators import simulate_annotators
-    from Tools.IIDModels import MultISAC
+
 
     # Load the Data
     _data = np.load(os.path.join(Const['Data.Clean'], '20NewsGroups_{}.npz'.format(DATA_TYPE)))
@@ -111,7 +125,7 @@ if __name__ == '__main__':
             _z_train = pd.Series(_z_train, dtype=CDType(categories=np.arange(len(_c_lab))))
             _z_train = pd.get_dummies(_z_train).values
             # Train Model
-            misac_clf = MultISAC(_phi=Phi, _num_proc=-1, _max_iter=100)
+            misac_clf = MultISAR(_phi=Phi, _num_proc=-1, _max_iter=100)
             misac_clf.fit_model(_X_train, _y_train, _z_train, SMOOTH_PARAMS, _f_lab, _starts)
             _performance[run-RUN_OFFSET, _i+1, :] = skext.evaluate(misac_clf, X_test, y_test, np.arange(len(_f_lab)), 'MISAC')
 

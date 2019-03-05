@@ -42,7 +42,7 @@ if __name__ == '__main__':
 
     # ==== Parse Arguments: ==== #
     _arg_parse = argparse.ArgumentParser(description='Load and Format the 20 Newsgroup Data-Set for processing')
-    _arg_parse.add_argument('-n', '--name', help='Output File-Name: default is {}'.format(DEFAULTS['Name']),
+    _arg_parse.add_argument('-o', '--output', help='Output File-Name: default is {}'.format(DEFAULTS['Name']),
                             default=DEFAULTS['Name'])
     _arg_parse.add_argument('-r', '--random', help='Seed for all Random States: ensures repeatibility. Defaults to {}'
                             .format(DEFAULTS['Random']), default=DEFAULTS['Random'])
@@ -95,7 +95,7 @@ if __name__ == '__main__':
     # ==== Store the Data ==== #
     print('Saving to file (compressed)...')
     vocabulary = {v: k for k, v in _vectorizer.vocabulary_.items()}
-    np.savez_compressed(_args.name, full_labelset=np.asarray(_to_get), group_labels=_course_labels, mapper=_mapper,
+    np.savez_compressed(_args.output, full_labelset=np.asarray(_to_get), group_labels=_course_labels, mapper=_mapper,
                         voc=[_2 for (_1, _2) in sorted(vocabulary.items())], X_train=X_train, y_train=y_train,
                         g_train=g_train, X_test=X_test, y_test=y_test, g_test=g_test)
     print('... Done.\n')
