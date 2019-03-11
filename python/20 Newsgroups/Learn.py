@@ -4,11 +4,11 @@ import pandas as pd
 import numpy as np
 import argparse
 import sys
-import os
 
 # Load SKLearn Stuff
 from sklearn.model_selection import train_test_split
 from sklearn.naive_bayes import MultinomialNB
+from sklearn.metrics import f1_score
 
 # Load own packages
 sys.path.append('..')
@@ -16,7 +16,7 @@ from Models import MultISAR
 
 # Default Parameters
 DEFAULTS = \
-    {'Source': '20NG_BOW',   # Source of the Data
+    {'Source': '20NG_BOW.npz',   # Source of the Data
      'Output': 'Results',    # Result file
      'Random': '0',          # Random Seed offset
      'Numbers':  ['0', '30'],  # Range: start index, number of runs
@@ -27,6 +27,7 @@ DEFAULTS = \
 
 if __name__ == '__main__':
 
+    # ==== Parse Arguments: ==== #
     _arg_parse = argparse.ArgumentParser(description='Train a Multinomial Class-Conditional ISAR')
     _arg_parse.add_argument('-s', '--source', help='Source file for Data: default is {}'.format(DEFAULTS['Source']),
                             default=DEFAULTS['Source'])
@@ -42,96 +43,103 @@ if __name__ == '__main__':
                                                      'is {}'.format(DEFAULTS['FullSpec']), default=DEFAULTS['FullSpec'])
     _arg_parse.add_argument('-a', '--alpha', help='Laplace Smoothing Parameter for Multinomial Distribution: Defaults '
                                                   'to {}'.format(DEFAULTS['Alpha']), default=DEFAULTS['Alpha'])
-    _arg_parse.add_argument('-s', '--steps', help='Steps at which to add the remaining data.', nargs='*',
-                            default=DEFAULTS['Steps'])
-    _args = _arg_parse.parse_args()
+    _arg_parse.add_argument('-i', '--increments', help='Steps at which to add the remaining data: should range from >0 '
+                                                       'to 1.0', nargs='*', default=DEFAULTS['Steps'])
+    # Parse Arguments and transform as required
+    args = _arg_parse.parse_args()
+    args.random = int(args.random)
+    run_offset = int(args.numbers[0])
+    run_length = int(args.numbers[1])
+    args.fullspec = float(args.fullspec)
+    args.alpha = float(args.alpha)
+    args.increments = np.asarray([float(s) for s in args.increments])
 
-
-
-    # Load own packages
-    from Tools.Common import skext
-    from Tools.Simulators import simulate_annotators
-
-
-    # Load the Data
-    _data = np.load(os.path.join(Const['Data.Clean'], '20NewsGroups_{}.npz'.format(DATA_TYPE)))
-
-    # Prepare Directory
-    FILE_NAME = 'MultISAC_SA_{0}_Augment_{1}_[{2:03d}-{3:03d}]_[{4:.3f}]'\
-        .format(DATA_TYPE, SIM_NUMBER, RUN_OFFSET, RUN_LENGTH, EXACT_PERCENT)
-
-    # Extract the different feature-matrices
+    # ===== Load/Prepare the Data: ===== #
+    print('Loading and Parsing the Data...')
+    _data = np.load(args.source)
+    # ---- Extract the different feature-matrices ---- #
+    # Raw Data-Sets
     X_train = _data['X_train']
     y_train = _data['y_train']
-    z_train = _data['z_train']
+    g_train = _data['g_train']
     X_test = _data['X_test']
     y_test = _data['y_test']
-    _f_lab = _data['fine_labels']
-    _c_lab = _data['coarse_labels']
-    _map = _data['mapper']
+    # Label System
+    labels_full = _data['full_labelset']
+    labels_group = _data['group_labels']
+    labels_map = _data['mapper']
+    # Keep track of sizes
+    sZ = len(labels_full)
+    sS = len(labels_group)
 
-    # Simulate Annotators
-    _groups = [[] for _ in _c_lab]
-    for _i, _v in enumerate(_map):
-        _groups[_v].append(_i)
-    simplistic_anns = simulate_annotators(_groups)
-
-    # Construct Phi
-    # Build Mapper (for Phi)
-    Phi = np.zeros([len(_f_lab), len(_c_lab), len(_f_lab) + len(_c_lab)])
-    mapper = np.zeros([len(_c_lab), len(_f_lab)])
-    for _i in range(len(_c_lab)):
-        mapper[_i, np.squeeze(np.where(_map == _i))] = 1
-    for z in range(len(_f_lab)):
-        for s in range(len(_c_lab)):
-            for y in range(len(_f_lab) + len(_c_lab)):
+    # ---- Construct Omega: ---- #
+    #    Omega is the Deterministic [0/1] Schema mapping. We do this based on domain knowledge of the groups
+    omega = np.zeros([sZ, sS, sZ + sS])
+    # Create forward Mapping (i.e. from group to labels)
+    mapper = np.zeros([sS, sZ])
+    for _i in range(sS):
+        mapper[_i, np.squeeze(np.where(labels_map == _i))] = 1
+    # Populate omega
+    for z in range(sZ):
+        for s in range(sS):
+            for y in range(sZ+sS):
                 if mapper[s, z] == 1:  # If in schema (Expertise)
                     if y == z:
-                        Phi[z, s, y] = 1.0
-                elif (y >= len(_f_lab)) and (mapper[y - len(_f_lab), z] == 1):  # Not In this Schema (Expertise)
-                    Phi[z, s, y] = 1.0
-    map_dict = {k+len(_f_lab):v for k, v in enumerate(mapper)}
+                        omega[z, s, y] = 1.0
+                elif (y >= sZ) and (mapper[y - sZ, z] == 1):  # Not In this Schema (Expertise)
+                    omega[z, s, y] = 1.0
 
-    # Iterate over Runs:
-    _performance = np.empty([RUN_LENGTH, len(AUG_PERCENT) + 1, 4])      # Create Array for Performance
-    _augmented = np.empty([RUN_LENGTH, len(AUG_PERCENT) + 1])         # Create Array to compute how many points
-    for run in range(RUN_OFFSET, RUN_OFFSET+RUN_LENGTH):
-        np.random.seed(run)
+    # ===== Simulate and Simultaneously Train Models: ===== #
+    f1_metric = np.empty([run_length, len(args.increments) + 1])   # Array for Performance Metric
+    aug_sizes = np.empty([run_length, len(args.increments) + 1])   # Array to keep track of lengths (due to randomness)
+    # ---- Run RUN_LENGTH independent trials ----
+    for run in range(run_offset, run_offset+run_length):
+        print('Executing Simulation Run: {} ... \n  - Splitting Data...'.format(run))
 
-        print('Executing Simulation Run: {} ... \n Simulating Data...'.format(run))
-        # [A] Split first into two sets, the first for exact data, the other for coarse labelling only
-        X_ex, X_crs, y_ex, y_crs, z_ex, z_crs = train_test_split(X_train, y_train, z_train, train_size=EXACT_PERCENT,
-                                                                 stratify=y_train, random_state=run)
+        # Seed with Random Offset + run value
+        np.random.seed(args.random + run)
 
-        # Do First Metric: Just the MNB:
-        mnb_clf = MultinomialNB(alpha=SMOOTH_PARAMS).fit(X_ex, y_ex)
-        _performance[run-RUN_OFFSET, 0, :] = skext.evaluate(mnb_clf, X_test, y_test, np.arange(len(_f_lab)), 'MNBD')
-        _augmented[run - RUN_OFFSET, 0] = len(y_ex)
+        # [A] Split first into two sets, the first for EXact data, the other for CoaRSe labelling only. To do this, we
+        #   use the train_test_split method of SKLearn. We use stratification to ensure balanced classes.
+        X_ex, X_crs, y_ex, y_crs, g_ex, g_crs = train_test_split(X_train, y_train, g_train, train_size=args.fullspec,
+                                                                 stratify=y_train, random_state=args.random + run)
+
+        # [B] Train using the Baseline: Multinomial Class conditionals on just the fully-specified data. This is done
+        #   using SKLearn's MultinomialNB Classifier. We then evaluate the performance on the entirely-held out test
+        #   set.
+        print('  - Training MultinomialNB...')
+        mnb_clf = MultinomialNB(alpha=args.alpha).fit(X_ex, y_ex)
+        _y_pred = mnb_clf.predict(X_test)
+        f1_metric[run-run_offset, 0] = f1_score(y_test, _y_pred, labels=np.arange(sZ), average='weighted')
+        aug_sizes[run-run_offset, 0] = len(y_ex)
+
+        # [C] Now train and evaluate the performance when augmenting the data-set with coarsely-labelled data.
+        #   To do this, we first compute the starting point for EM as the model parameters of the MNB Model
+        sys.stdout.write('  - Training Augmented ISAR Model:')
         _starts = [(np.exp(mnb_clf.class_log_prior_), np.exp(mnb_clf.feature_log_prob_))]
-
-        # Now do the metrics for augmentations
-        for _i, _a in enumerate(AUG_PERCENT):
-            # Find the Length of Indices to assign
+        for _i, _a in enumerate(args.increments):
+            sys.stdout.write(' {}'.format(_a)); sys.stdout.flush()
+            # Find the Number of samples to augment with (from the coarse set)
             _top_idx = np.ceil(len(X_crs) * _a).astype(int)
-            _augmented[run - RUN_OFFSET, _i + 1] = _top_idx + len(y_ex)
+            aug_sizes[run - run_offset, _i + 1] = _top_idx + len(y_ex)
             # Setup X-Data
             _X_train = np.concatenate((X_ex, X_crs[:_top_idx, :]), axis=0)
-            # Setup Y-Data
-            _y_train = np.concatenate((y_ex, z_crs[:_top_idx] + len(_f_lab)), axis=0)
-            _y_train = pd.Series(_y_train, dtype=CDType(categories=np.arange(len(_f_lab) + len(_c_lab))))
+            # Setup Training Data (y-targets with some of the labels coarsely specified). Due to legacy reasons during
+            #   development of the code, the labels must be one-hot encoded (we use Pandas to achieve this)
+            _y_train = np.concatenate((y_ex, g_crs[:_top_idx] + sZ), axis=0)
+            _y_train = pd.Series(_y_train, dtype=CDType(categories=np.arange(sZ + sS)))
             _y_train = pd.get_dummies(_y_train).values
-            # Setup Z-Data
-            _z_train = np.concatenate((z_ex, (z_crs[:_top_idx]+1)%len(_c_lab)), axis=0)
-            _z_train = pd.Series(_z_train, dtype=CDType(categories=np.arange(len(_c_lab))))
-            _z_train = pd.get_dummies(_z_train).values
+            # Setup Schema Indicators: this is basically the group value. Again, this is one-hot encoded
+            _s_train = np.concatenate((g_ex, (g_crs[:_top_idx]+1)%sS), axis=0)
+            _s_train = pd.Series(_s_train, dtype=CDType(categories=np.arange(sS)))
+            _s_train = pd.get_dummies(_s_train).values
             # Train Model
-            misac_clf = MultISAR(_phi=Phi, _num_proc=-1, _max_iter=100)
-            misac_clf.fit_model(_X_train, _y_train, _z_train, SMOOTH_PARAMS, _f_lab, _starts)
-            _performance[run-RUN_OFFSET, _i+1, :] = skext.evaluate(misac_clf, X_test, y_test, np.arange(len(_f_lab)), 'MISAC')
-
-    # Store the Results to File
+            misac_clf = MultISAR(omega=omega, _num_proc=-1, _max_iter=100)
+            misac_clf.fit_model(_X_train, _y_train, _s_train, args.alpha, _starts)
+            # Evaluate performance (on held-out test set)
+            _y_pred = misac_clf.predict(X_test)
+            f1_metric[run-run_offset, _i+1] = f1_score(y_test, _y_pred, labels=np.arange(sZ), average='weighted')
+        print('  Done\n')
+    # ===== Finally store the results to File: ===== #
     print('Storing Results to file ... ')
-    np.savez_compressed(os.path.join(Const['Results.Scratch'], FILE_NAME),
-                        performance=_performance, augmented=_augmented)
-
-
+    np.savez_compressed(args.output, score=f1_metric, sizes=aug_sizes)

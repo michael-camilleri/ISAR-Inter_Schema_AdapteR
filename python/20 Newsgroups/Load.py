@@ -86,7 +86,7 @@ if __name__ == '__main__':
     _mapper = np.empty(len(_to_get), dtype=int)
     for grp_idx, grp in enumerate(_groups.values()):         # Iterate over Hierarchical Labels
         for lbl in grp:                                      # Iterate over fine-grained labels
-            _mapper[_to_get.index(lbl)] = grp_idx            # Encode 'inverse'-mapping
+            _mapper[_to_get.index(lbl)] = grp_idx            # Encode 'inverse'-mapping from label to its group
     # Map the target labels
     g_train = npext.value_map(y_train, _to=_mapper, shuffle=True)
     g_test = npext.value_map(y_test, _to=_mapper, shuffle=True)

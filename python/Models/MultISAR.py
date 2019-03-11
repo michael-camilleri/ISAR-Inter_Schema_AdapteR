@@ -169,11 +169,11 @@ class MultISAR(WorkerHandler):
                 return abs((likelihoods[-1] - likelihoods[-2])/likelihoods[-2]) < tolerance
 
     # ========================== Initialisers ========================== #
-    def __init__(self, _omega, _num_proc, _max_iter, _toler=1e-4, _track_rate=5, sink=None):
+    def __init__(self, omega, _num_proc, _max_iter, _toler=1e-4, _track_rate=5, sink=None):
         """
         Initialiser
 
-        :param _omega:      Fixed Emission Matrix Omega. This must be an NdArray of size |S| by |U| by |X|
+        :param omega:      Fixed Emission Matrix Omega. This must be an NdArray of size |S| by |Z| by |Y|
         :param _num_proc:   Number of processes to run in - see MultiProgramming
         :param _max_iter:   Maximum Number of iterations in EM
         :param _toler:      Tolerance for convergence
@@ -185,7 +185,7 @@ class MultISAR(WorkerHandler):
         super(MultISAR, self).__init__(_num_proc, sink)
 
         # Initialise own-stuff
-        self.Omega = _omega
+        self.Omega = omega
         self.Pi = None
         self.Phi = None
         self.__max_iter = _max_iter
@@ -197,7 +197,7 @@ class MultISAR(WorkerHandler):
         self.__sink.write(*args)
         self.__sink.flush()
 
-    def fit_model(self, features, labels, schema, prior, _latent_set, _starts=1):
+    def fit_model(self, features, labels, schema, prior, _starts=1):
         """
         Fit the Parameters Pi/Phi to the data, and generate MAP estimates for the latent behaviour:
 
@@ -205,6 +205,7 @@ class MultISAR(WorkerHandler):
         :param labels:          Target Labels, in schema (1-Hot Encoded): [N by |Y|]
         :param schema:          Schema for each sample (1-Hot Encoded): [N by |S|]
         :param prior:           Prior Probability smoothing for Pi and Phi (scalar)
+        :param _latent_set:     The set of latent values (for mapping to if these are not just contiguous numbers)
         :param _starts:         This can be either:
                                     * Integer - Number of random starts to perform
                                     * List of Starting points (each starting point should be a tuple/list, containing
@@ -263,7 +264,7 @@ class MultISAR(WorkerHandler):
         self.Phi = results.Phi.copy()
 
         # Build (and return) Information Structure
-        return self.MISARResults_t(ModelDims=[len(_latent_set), schema.shape[1], features.shape[1], labels.shape[1]],
+        return self.MISARResults_t(ModelDims=[self.Omega.shape[1], schema.shape[1], features.shape[1], labels.shape[1]],
                                    DataDims=len(schema), Pi=results.Pi, Phi=results.Phi, BestRun=results.Best,
                                    Converged=results.Converged, LogLikelihood=results.LogLikelihood,
                                    Evolutions=results.Evolutions, Times={'Total': self.elapsed('global'),
