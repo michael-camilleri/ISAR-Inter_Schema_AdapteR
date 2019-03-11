@@ -1,3 +1,6 @@
+"""
+Script to Simulate and Train the MultISAR model on the 20 Newsgroup Dataset
+"""
 # Load Python Specific Libraries
 from pandas.api.types import CategoricalDtype as CDType
 import pandas as pd
@@ -17,7 +20,7 @@ from Models import MultISAR
 # Default Parameters
 DEFAULTS = \
     {'Source': '20NG_BOW.npz',   # Source of the Data
-     'Output': 'Results',    # Result file
+     'Output': 'Results_02',    # Result file
      'Random': '0',          # Random Seed offset
      'Numbers':  ['0', '30'],  # Range: start index, number of runs
      'FullSpec': '0.02',     # Proportion of Fully-Specified Labels
