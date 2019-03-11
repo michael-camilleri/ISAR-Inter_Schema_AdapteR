@@ -1,7 +1,7 @@
 # Conda-Based Requirements: these can be installed by running:
 # 'conda install --file conda.req'
-scikit-learn
-matplotlib
-pandas
-numpy
+scikit-learn=0.20.2
+matplotlib=3.0.2
+pandas=0.24.1
+numpy=1.16.2
 
