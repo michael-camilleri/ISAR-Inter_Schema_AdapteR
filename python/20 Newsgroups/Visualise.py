@@ -2,12 +2,13 @@
 Script to Visualise the results of training
 """
 # Load Python Specific Libraries
+from matplotlib.ticker import MultipleLocator as MLoc
 from matplotlib import pyplot as plt
 import numpy as np
 import argparse
 
 DEFAULTS = {'Results': ['Results_02.npz', 'Results_05.npz', 'Results_10.npz', 'Results_20.npz'],  # List of result files
-            'Names': ['2.0%', '5.0%', '10.0%', '20.0%']}              # Names to accompany Result Files
+            'Names': ['  2.0%', '  5.0%', '10.0%', '20.0%']}              # Names to accompany Result Files
 
 if __name__=='__main__':
 
@@ -29,8 +30,11 @@ if __name__=='__main__':
         _sizes = _data['sizes']
         plt.errorbar(_sizes.mean(axis=0), _scores.mean(axis=0), _scores.std(axis=0), label=exp_name, linewidth=3.0)
     # --- Improve Plot --- #
-    plt.legend(fontsize=18)
-    plt.xlabel('Number of samples used for training', fontsize=18)
-    plt.ylabel('Mean F1 Score', fontsize=18)
-    plt.tick_params(axis='both', which='major', labelsize=18)
+    plt.legend(fontsize=20, loc=4)
+    plt.xlabel('Number of samples used for training', fontsize=20)
+    plt.ylabel('Mean F1 Score', fontsize=20)
+    plt.tick_params(axis='both', which='major', labelsize=20)
+    plt.grid(True, which='major', axis='both')
+    plt.axes().yaxis.set_minor_locator(MLoc(0.025))
+    plt.grid(True, which='minor', axis='y', color='c', linestyle='--')
     plt.show()
