@@ -6,8 +6,8 @@ from matplotlib import pyplot as plt
 import numpy as np
 import argparse
 
-DEFAULTS = {'Results': ['Results_02.npz'],  # List of the result files
-            'Names': ['2.0%']}              # Names to accompany Result Files
+DEFAULTS = {'Results': ['Results_02.npz', 'Results_05.npz', 'Results_10.npz', 'Results_20.npz'],  # List of result files
+            'Names': ['2.0%', '5.0%', '10.0%', '20.0%']}              # Names to accompany Result Files
 
 if __name__=='__main__':
 

@@ -18,8 +18,8 @@ class MultISAR(WorkerHandler):
     """
     # ============================== Data Type Definitions =============================== #
     WorkerResults_t = namedtuple('WorkerResults_t', ['Pi', 'Phi', 'LogLikelihood', 'Converged', 'Best', 'Evolutions'])
-    MISARResults_t = namedtuple('PABResults_t', ['ModelDims', 'DataDims', 'Pi', 'Phi', 'BestRun', 'Converged',
-                                                 'LogLikelihood', 'Evolutions', 'Times'])
+    MISARResults_t = namedtuple('MISARResults_t', ['ModelDims', 'DataDims', 'Pi', 'Phi', 'BestRun', 'Converged',
+                                                   'LogLikelihood', 'Evolutions', 'Times'])
 
     # ========================== Private Nested Implementations ========================== #
     class EMWorker(WorkerHandler.Worker):

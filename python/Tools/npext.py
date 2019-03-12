@@ -1,7 +1,53 @@
 """
 This module contains some extensions of numpy/pandas functionality (hence the name 'NumPy EXTensions').
 """
+from scipy.special import gamma
 import numpy as np
+
+
+class Dirichlet:
+    """
+    An alternative Dirichlet Class which
+        a) Precomputes the normalisation parameters for efficiency
+        b) can vectorise over matrices, where the last-dimension is the probability distribution.
+    """
+    def __init__(self, alpha):
+        """
+        Initialise the Dirichlet with a particular alpha
+
+        :param alpha: Alpha (Concentration) parameter. This is a K-D Matrix, where the last dimension is the probability
+        """
+        alpha = np.asarray(alpha)                                                   # K   Dimensional
+        self.norm = np.prod(gamma(alpha), axis=-1) / gamma(np.sum(alpha, axis=-1))  # K-1 Dimensional
+        self.lognorm = np.log(self.norm)                                            # K-1 Dimensional
+        self.alpha = np.asarray(alpha) - 1.0                                        # K   Dimensional
+
+    def pdf(self, x):
+        """
+        Compute the PDF of the passed Matrix (must be of the same dimensionality and size as Alpha)
+
+        :param x: Probability Matrix
+        :return: Dirichlet Probability on x
+        """
+        return np.prod(np.power(x, self.alpha), axis=-1) / self.norm
+
+    def logpdf(self, x):
+        """
+        Compute the Log-PDF of the passed Matrix (must be of the same dimensionality and size as Alpha)
+
+        :param x: Probability Matrix
+        :return:  Log-Probability on X
+        """
+        return np.sum(np.multiply(np.log(x), self.alpha), axis=-1) - self.lognorm
+
+    def logsumpdf(self, x):
+        """
+        Compute the Log-PDF of the passed Matrix (must be of the same dimensionality and size as Alpha) and sum it.
+
+        :param x: Probability Matrix
+        :return:  Log-Sum-Probability on X
+        """
+        return self.logpdf(x).sum()
 
 
 def value_map(array, _to, _from=None, shuffle=False):
@@ -121,3 +167,16 @@ def sum_to_one(x, axis=None, norm=False):
     _sum = np.sum(x, axis=axis, keepdims=True)  # Find Sum
     _sum[_sum == 0] = 1.0                       # Avoid Division by Zero
     return (np.divide(x, _sum), 1.0/_sum.squeeze()) if norm else np.divide(x, _sum)
+
+
+def maximise_trace(x):
+    """
+    Maximise the Trace of a SQUARE Matrix X using the Hungarian Algorithm
+
+    :param x: Numpy 2D SQUARE Array
+    :return: Tuple containing (in order):
+                * optimal permutation of columns to achieve a maximal trace
+                * size of this trace
+    """
+    _rows, _cols = hungarian(np.full(len(x), np.max(x)) - x)
+    return _cols, x[_rows, _cols].sum()

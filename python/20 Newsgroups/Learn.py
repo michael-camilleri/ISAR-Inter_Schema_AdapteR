@@ -20,10 +20,10 @@ from Models import MultISAR
 # Default Parameters
 DEFAULTS = \
     {'Source': '20NG_BOW.npz',   # Source of the Data
-     'Output': 'Results_02',    # Result file
+     'Output': 'Results_20',    # Result file
      'Random': '0',          # Random Seed offset
      'Numbers':  ['0', '30'],  # Range: start index, number of runs
-     'FullSpec': '0.02',     # Proportion of Fully-Specified Labels
+     'FullSpec': '0.2',     # Proportion of Fully-Specified Labels
      'Alpha': '0.005',       # Laplace Smoothing Parameter for counts
      'Steps': ['0.01', '0.02', '0.04', '0.06', '0.08', '0.1', '0.15', '0.2', '0.3', '0.4', '0.5', '0.6', '0.8', '1.0']}
 

@@ -16,7 +16,7 @@ This repository contains python code for replicating the Results in the Paper:
 At the top level, there are two `requirements` files, for easy installation of the necessary packages. All the code is packaged under the python directory which contains the following packages:
  * **Tools**: Contains in-house libraries/modules used by the remainder of the scripts: this includes a multi-processing wrapper for exploiting multi-core architectures and extensions to some numpy methods.
  * **Models**: Contains the ISAR implementations for the Multinomial Class-Conditional and Inter-Annotator Variability models.
- * **20 Newsgroups**: Contains scripts for replicating the results of the simulations on the 20 Newsgroups Dataset
+ * **20 Newsgroups**: Contains scripts for replicating the results of the simulations on the 20 Newsgroups Dataset (i.e. Section 5.2 in the Paper)
  
 In general, the replication scripts follow the pattern: `Load`, `Learn`, `Visualise`.
 
