@@ -7,7 +7,8 @@ from matplotlib import pyplot as plt
 import numpy as np
 import argparse
 
-DEFAULTS = {'Results': ['Results_02.npz', 'Results_05.npz', 'Results_10.npz', 'Results_20.npz'],  # List of result files
+DEFAULTS = {'Results': ['../../data/Results_02.npz', '../../data/Results_05.npz', '../../data/Results_10.npz',
+                        '../../data/Results_20.npz'],  # List of result files
             'Names': ['  2.0%', '  5.0%', '10.0%', '20.0%']}              # Names to accompany Result Files
 
 if __name__=='__main__':
@@ -25,9 +26,9 @@ if __name__=='__main__':
     # ==== Load Files and Visualise Plots ==== #
     # --- Iterate through Experiments --- #
     for exp_name, exp_file in zip(args.names, args.results):
-        _data = np.load(exp_file)
-        _scores = _data['score']
-        _sizes = _data['sizes']
+        with np.load(exp_file) as _data:
+            _scores = _data['score']
+            _sizes = _data['sizes']
         plt.errorbar(_sizes.mean(axis=0), _scores.mean(axis=0), _scores.std(axis=0), label=exp_name, linewidth=3.0)
     # --- Improve Plot --- #
     plt.legend(fontsize=20, loc=4)

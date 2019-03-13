@@ -172,7 +172,7 @@ class AnnotISAR(WorkerHandler):
         self.__sink.write(*args)
         self.__sink.flush()
 
-    def fit_model(self, data_hot, schema, prior, _latent_set, _starts=1):
+    def fit_model(self, data_hot, schema, prior, _starts=1):
         """
         Fit the Parameters Pi/Psi to the data, and generate MAP estimates for the latent behaviour:
 
@@ -180,7 +180,6 @@ class AnnotISAR(WorkerHandler):
         :param schema:          Schema for each sample (one-hot encoded): [N]
         :param prior:           Prior Probabilities for Pi and Psi (|Z|, [|Z| by K by |U|]): Note these must be raw
                                 (smoothing) counts (equivalent to [alpha-1] in Dirichlet prior formulation)
-        :param _latent_set:     Set of (ordered) latent manifestations possible (i.e. latent schema in use)
         :param _starts:         This can be either:
                                     * Integer - Number of random starts to perform
                                     * List of Starting points (each starting point should be a tuple/list, containing

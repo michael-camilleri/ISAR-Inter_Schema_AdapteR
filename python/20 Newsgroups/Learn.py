@@ -19,8 +19,8 @@ from Models import MultISAR
 
 # Default Parameters
 DEFAULTS = \
-    {'Source': '20NG_BOW.npz',   # Source of the Data
-     'Output': 'Results_20',    # Result file
+    {'Source': '../../data/20NG_BOW.npz',   # Source of the Data
+     'Output': '../../data/Results_20',    # Result file
      'Random': '0',          # Random Seed offset
      'Numbers':  ['0', '30'],  # Range: start index, number of runs
      'FullSpec': '0.2',     # Proportion of Fully-Specified Labels
@@ -59,18 +59,18 @@ if __name__ == '__main__':
 
     # ===== Load/Prepare the Data: ===== #
     print('Loading and Parsing the Data...')
-    _data = np.load(args.source)
     # ---- Extract the different feature-matrices ---- #
-    # Raw Data-Sets
-    X_train = _data['X_train']
-    y_train = _data['y_train']
-    g_train = _data['g_train']
-    X_test = _data['X_test']
-    y_test = _data['y_test']
-    # Label System
-    labels_full = _data['full_labelset']
-    labels_group = _data['group_labels']
-    labels_map = _data['mapper']
+    with np.load(args.source) as _data:
+        # Raw Data-Sets
+        X_train = _data['X_train']
+        y_train = _data['y_train']
+        g_train = _data['g_train']
+        X_test = _data['X_test']
+        y_test = _data['y_test']
+        # Label System
+        labels_full = _data['full_labelset']
+        labels_group = _data['group_labels']
+        labels_map = _data['mapper']
     # Keep track of sizes
     sZ = len(labels_full)
     sS = len(labels_group)

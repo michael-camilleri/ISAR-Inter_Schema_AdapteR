@@ -53,7 +53,7 @@ class AnnotDS(WorkerHandler):
                                             for U of size |Z| by (K * |U|). Note that these should be raw counts equal
                                             to [alpha - 1] already.
                             > order:        True/False: if True, sorts the thetas in ascending order for identifiability
-            :param _data:   None or [phi, psi]
+            :param _data:   None or [pi, psi]
                             > pi - Initial value for pi
                             > psi - Initial value for psi
             :return: Tuple containing (in order):
@@ -107,10 +107,10 @@ class AnnotDS(WorkerHandler):
             self.update_progress(100.0)
             converged = self.converged(loglikelihood_O, tolerance)
 
-            # Optionally, sort the parameters in ascending probability for phi
+            # Optionally, sort the parameters in ascending probability for pi
             if order:
                 _sort_order = np.argsort(pi)
-                phi = pi[_sort_order]
+                pi = pi[_sort_order]
                 psi = np.stack((psi[j] for j in _sort_order), axis=0)
 
             # Return Result
@@ -194,18 +194,16 @@ class AnnotDS(WorkerHandler):
         self.__sink.write(*args)
         self.__sink.flush()
 
-    def fit_model(self, data_raw, data_hot, prior, _latent_set, _starts=1):
+    def fit_model(self, data_hot, prior, _starts=1):
         """
-        Fit the Parameters Phi/Psi to the data, and generate MAP estimates for the latent behaviour:
+        Fit the Parameters Pi/Psi to the data, and generate MAP estimates for the latent behaviour:
 
-        :param data_raw:        Raw (Enumerated or Float) Observations: Size N x K
         :param data_hot:        One-Hot Encoded Observations:  Size N x K|U|
-        :param prior:           Prior Probabilities for Phi and Psi [|Z|, |Z| x K|U|]
-        :param _latent_set:     Set of (ordered) latent manifestations possible (i.e. latent schema in use)
+        :param prior:           Prior Probabilities for Pi and Psi [|Z|, |Z| x K|U|]
         :param _starts:         This can be either:
                                     * Integer - Number of random starts to perform
                                     * List of Starting points (each starting point should be a tuple/list, containing
-                                        the starting phi/psi matrices.
+                                        the starting pi/psi matrices.
         :return:    Dictionary, containing the results:
                         * Pi:  Latent Probabilities
                         * Psi:  Emission Probabilities
@@ -247,7 +245,6 @@ class AnnotDS(WorkerHandler):
         self._write('\t\tExpectation Maximisation   : {0:1.3f}s ({1:1.5f}s/run)\n'.format(self.elapsed('em'), self.elapsed('em')/workers))
         self._write('\t\tGenerating MAP Predictions : {0:1.3f}s\n'.format(self.elapsed('predict')))
 
-
         # Build (and return) Information Structure
         return {'Dims': self.Dims, 'Pi': pi, 'Psi': psi, 'Best': results['Best'], 'Converged': results['Converged'],
                 'LogLikelihood': results['LogLikelihood'], 'LogLike_Evol': results['Stat_LLikel'],
@@ -256,7 +253,7 @@ class AnnotDS(WorkerHandler):
 
     def aggregate_results(self, results):
         """
-        Maximise parameters over runs: for comparison's sake, it assumes that the phi's and psi's are sorted in a
+        Maximise parameters over runs: for comparison's sake, it assumes that the pi's and psi's are sorted in a
         consistent order (for comparison).
 
         :param results: the ApplyResult object
@@ -309,33 +306,34 @@ class AnnotDS(WorkerHandler):
                 'Best': _best_index}
 
     @staticmethod
-    def estimate_map(pi, psi, u, label_set, max_size=None):
+    def estimate_map(pi, psi, u, label_set, max_only=False, max_size=None):
         """
         Compute Predictions (most probable, based on MAP) for the latent states given the observations
 
-        :param pi:         Latent distribution
+        :param pi:          Latent distribution
         :param psi:         Class Conditional Densities
-        :param u:           Observations (One-Hot Encoding, size K*|U|)
+        :param u:           Observations (One-Hot Encoding, size [N by K*|U|])
         :param label_set:   The original label set for the latent states (i.e. actual values associated with each index
                             in the current ordering.
         :param max_only:    If True (default) just return the MAP estimate: otherwise, return the posterior probabilities
-        :return:            Maximum a Posteriori latent state or (experimentaly) the posterior probabilities
+        :param max_size:    Must be set if max_only is True (otherwise ignored).
+        :return:            Maximum a Posteriori latent state or the posterior probabilities
         """
         # Compute Posterior
         _posterior = np.multiply(np.prod(np.power(psi.T[np.newaxis, :, :], u[:, :, np.newaxis]), axis=1), pi[np.newaxis, :])
 
         # Branch on whether to compute MAP or just output probabilities
-        if max_size is None:
+        if max_only:
             return npext.value_map(np.argmax(_posterior, axis=1), label_set, shuffle=True)   # Map to original Label-Set
         else:
             _posterior = npext.sum_to_one(_posterior, axis=1)            # Normalised Probabilities
-            _mapped_post = np.zeros([_posterior.shape[0], max_size])     # Placeholder for mapped posterior
+            _mapped_post = np.zeros([_posterior.shape[0], max_size])     # Placeholder for mapped posterior (mapped to actual value in label_set)
             for _i, _l in enumerate(label_set):
                 _mapped_post[:, _l] = _posterior[:, _i]
             return _mapped_post
 
     @staticmethod
-    def optimise_permutations(_map, _raw, _phi, _psi, _labels):
+    def optimise_permutations(_map, _raw, _pi, _psi, _labels):
         """
         Optimise the permutation of the latent states (_map) such that there is least error (confusion matrix, highest
         agreement) with the raw data.
@@ -346,11 +344,11 @@ class AnnotDS(WorkerHandler):
 
         :param _map:    MAP Estimates of the data [N]
         :param _raw:    Raw (floating point Numpy Array) data [N by K]
-        :param _phi:    Phi Vector (to permute)
+        :param _pi:     Pi Vector (to permute)
         :param _psi:    Psi Vector (to permute)
         :param _labels: Label-Set (for both)
         :return: Tuple containing in order:
-                        * Updated Phi
+                        * Updated Pi
                         * Updated Psi
                         * Updated MAP Predictions
         """
@@ -371,10 +369,10 @@ class AnnotDS(WorkerHandler):
         _best_permute, _ = npext.maximise_trace(_confusion.T)
 
         # Finally, update Parameters
-        _phi[list(_best_permute)] = _phi.copy()
+        _pi[list(_best_permute)] = _pi.copy()
         _psi[list(_best_permute)] = _psi.copy()
         _best_labels = _labels[_best_permute]
-        return _phi, _psi, npext.value_map(_map, _best_labels, _labels), _best_permute
+        return _pi, _psi, npext.value_map(_map, _best_labels, _labels), _best_permute
 
     @staticmethod
     def data_likelihood(theta, prior, data):

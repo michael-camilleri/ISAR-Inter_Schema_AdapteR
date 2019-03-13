@@ -21,10 +21,10 @@ from sklearn.feature_extraction.text import CountVectorizer
 sys.path.append('../')
 from Tools import npext
 
-DEFAULTS = {'Name': '20NG_BOW',     # Name of the output data-file
-            'Random': '1010',       # Random Seed State
-            'Features': '5000',     # Feature-Set size
-            'TestSize': '0.2'}      # Test-Set Proportion
+DEFAULTS = {'Name': '../../data/20NG_BOW',     # Name of the output data-file
+            'Random': '1010',                  # Random Seed State
+            'Features': '5000',                # Feature-Set size
+            'TestSize': '0.2'}                 # Test-Set Proportion
 
 # We specify the following Groups for the Hierarchical Structure: This is the the same grouping as specified in the
 #    original collection of the data: http://qwone.com/~jason/20Newsgroups/
@@ -61,7 +61,7 @@ if __name__ == '__main__':
     _to_get = [c_ for sublist in _groups.values() for c_ in sublist]
     #  I decided to shuffle the data, but with a known random-state.
     _data = fetch_20newsgroups(subset='all', remove=('headers', 'footers'), categories=_to_get, shuffle=True,
-                               random_state=rs)
+                               random_state=rs, data_home='../../data')
     # Now, due to presentation reasons, I will reorder the label indices.
     _mapper = [_to_get.index(_) for _ in _data.target_names]
     _y_all = npext.value_map(_data.target, _to=_mapper, shuffle=True)
