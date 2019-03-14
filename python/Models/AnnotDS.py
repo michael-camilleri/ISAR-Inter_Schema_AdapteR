@@ -241,9 +241,8 @@ class AnnotDS(WorkerHandler):
         self.stop_timer('global')
 
         # Display some statistics
-        self._write('NAModel was fit in {0:1.5f}s of which:\n'.format(self.elapsed('global')))
+        self._write('DS Model was fit in {0:1.5f}s of which:\n'.format(self.elapsed('global')))
         self._write('\t\tExpectation Maximisation   : {0:1.3f}s ({1:1.5f}s/run)\n'.format(self.elapsed('em'), self.elapsed('em')/workers))
-        self._write('\t\tGenerating MAP Predictions : {0:1.3f}s\n'.format(self.elapsed('predict')))
 
         # Build (and return) Information Structure
         return {'Dims': self.Dims, 'Pi': pi, 'Psi': psi, 'Best': results['Best'], 'Converged': results['Converged'],
@@ -306,7 +305,7 @@ class AnnotDS(WorkerHandler):
                 'Best': _best_index}
 
     @staticmethod
-    def estimate_map(pi, psi, u, label_set, max_only=False, max_size=None):
+    def estimate_map(pi, psi, u, label_set, max_only=False, max_size=None, eps=1e-30):
         """
         Compute Predictions (most probable, based on MAP) for the latent states given the observations
 
@@ -316,7 +315,8 @@ class AnnotDS(WorkerHandler):
         :param label_set:   The original label set for the latent states (i.e. actual values associated with each index
                             in the current ordering.
         :param max_only:    If True (default) just return the MAP estimate: otherwise, return the posterior probabilities
-        :param max_size:    Must be set if max_only is True (otherwise ignored).
+        :param max_size:    Must be set if max_only is False (otherwise ignored).
+        :param eps:         Set the minimum value to this to avoid log(0)
         :return:            Maximum a Posteriori latent state or the posterior probabilities
         """
         # Compute Posterior
@@ -327,7 +327,7 @@ class AnnotDS(WorkerHandler):
             return npext.value_map(np.argmax(_posterior, axis=1), label_set, shuffle=True)   # Map to original Label-Set
         else:
             _posterior = npext.sum_to_one(_posterior, axis=1)            # Normalised Probabilities
-            _mapped_post = np.zeros([_posterior.shape[0], max_size])     # Placeholder for mapped posterior (mapped to actual value in label_set)
+            _mapped_post = np.full([_posterior.shape[0], max_size], eps)  # Placeholder for mapped posterior (mapped to actual value in label_set)
             for _i, _l in enumerate(label_set):
                 _mapped_post[:, _l] = _posterior[:, _i]
             return _mapped_post

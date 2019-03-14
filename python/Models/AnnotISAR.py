@@ -18,9 +18,9 @@ class AnnotISAR(WorkerHandler):
     Refer to the Paper, esp Appendix for derivations/definitions of the equations
     """
     # ============================== Data Type Definitions =============================== #
-    WorkerResults_t = namedtuple('WorkerResults_t', ['Pi', 'Psi', 'LogLikelihood', 'Converged', 'Best'])
+    WorkerResults_t = namedtuple('WorkerResults_t', ['Pi', 'Psi', 'LogLikelihood', 'Converged', 'Best', 'LLEvolutions'])
     AISARResults_t = namedtuple('AISARResults_t', ['ModelDims', 'DataDims', 'Pi', 'Psi', 'BestRun', 'Converged',
-                                                   'LogLikelihood', 'Times'])
+                                                   'LogLikelihood', 'Times', 'LLEvolutions'])
 
     # ========================== Private Nested Implementations ========================== #
     class EMWorker(WorkerHandler.Worker):
@@ -30,7 +30,7 @@ class AnnotISAR(WorkerHandler):
         # Definition of Named Data-Types
         ComputeCommon_t = namedtuple('ComputeParams_t', ['max_iter', 'tolerance', 'm_omega', 'prior_pi', 'prior_psi'])
         Messages_t = namedtuple('Messages_t', ['m_omega_star', 'm_omega_star_sum_u', 'm_psi_pi', 'm_psi_pi_sum_z'])
-        ComputeResult_t = namedtuple('ComputeResult_t', ['Pi', 'Psi', 'LogLikelihood', 'Converged'])
+        ComputeResult_t = namedtuple('ComputeResult_t', ['Pi', 'Psi', 'LogLikelihood', 'Converged', 'LLEvolutions'])
 
         def __init__(self, _id, _handler):
             """
@@ -85,9 +85,9 @@ class AnnotISAR(WorkerHandler):
             while iterations < _common.max_iter and not self._converged(loglikelihood, _common.tolerance):
                 # -------------- E-Step: -------------- #
                 # First Compute Gamma
-                gamma = np.divide(msg.m_psi_pi, msg.m_psi_pi_sum_z)                         # Gamma  [N, |Z|, 1,  1 ]
+                gamma = np.divide(msg.m_psi_pi, msg.m_psi_pi_sum_z)                            # Gamma  [N, |Z|, 1,  1 ]
                 # Now Compute Rho
-                rho = np.multiply(np.divide(gamma, msg.m_psi_pi), msg.m_omega_star_sum_u)   # Rho    [N, |Z|, K, |U|]
+                rho = np.multiply(np.divide(gamma, msg.m_omega_star_sum_u), msg.m_omega_star)  # Rho    [N, |Z|, K, |U|]
 
                 # -------------- M-Step: -------------- #
                 # Now Compute Pi
@@ -113,7 +113,8 @@ class AnnotISAR(WorkerHandler):
             converged = self._converged(loglikelihood, _common.tolerance)
 
             # Return Result
-            return self.ComputeResult_t(Pi=pi, Psi=psi, LogLikelihood=loglikelihood[-1], Converged=converged)
+            return self.ComputeResult_t(Pi=pi, Psi=psi, LogLikelihood=loglikelihood[-1], Converged=converged,
+                                        LLEvolutions=loglikelihood)
 
         @staticmethod
         def _compute_messages(m_omega: np.ndarray, pi, psi):
@@ -237,7 +238,7 @@ class AnnotISAR(WorkerHandler):
                                    DataDims=len(data_hot), Pi=results.Pi, Psi=results.Psi, BestRun=results.Best,
                                    Converged=results.Converged, LogLikelihood=results.LogLikelihood,
                                    Times={'Total': self.elapsed('global'), 'Message': self.elapsed('m_omega'),
-                                          'EM': self.elapsed('em')})
+                                          'EM': self.elapsed('em')}, LLEvolutions=results.LLEvolutions)
 
     def aggregate_results(self, results):
         """
@@ -256,6 +257,7 @@ class AnnotISAR(WorkerHandler):
         _final_pis  = []  # Final Pi for each EM run
         _final_psis = []  # Final Psi for each EM run
         _final_llik = []  # Final Likelihood, for each EM run
+        _evol_llik = []   # List of Likelihood Evolutions (for debugging)
         _converged  = []  # Whether the run converged:
 
         # Iterate over results from each worker:
@@ -263,6 +265,7 @@ class AnnotISAR(WorkerHandler):
             _final_pis.append(result.Pi)
             _final_psis.append(result.Psi)
             _final_llik.append(result.LogLikelihood)
+            _evol_llik.append(result.LLEvolutions)
             _converged.append(result.Converged)
 
 
@@ -283,7 +286,8 @@ class AnnotISAR(WorkerHandler):
 
         # Return Results in Dictionary:
         return self.WorkerResults_t(Pi=_final_pis[_best_index], Psi=_final_psis[_best_index], Best=_best_index,
-                                    LogLikelihood=_final_llik[_best_index], Converged=np.asarray(_converged))
+                                    LogLikelihood=_final_llik[_best_index], Converged=np.asarray(_converged),
+                                    LLEvolutions=_evol_llik)
 
     @staticmethod
     def msg_omega(omega, _hot, _schema):

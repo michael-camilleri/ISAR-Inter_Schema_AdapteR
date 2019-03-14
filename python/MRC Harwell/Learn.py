@@ -19,8 +19,8 @@ from Models import AnnotDS, AnnotISAR
 DEFAULTS = \
     {'Output': ['../../data/Results_DS', '../../data/Results_ISAR'],    # Result files (one each for DS and ISAR)
      'Random': '0',                                                     # Random Seed offset
-     'Numbers': ['0', '30'],                                            # Range: start index, number of runs
-     'Lengths': ['10', '540'],                                         # Number and length of segments
+     'Numbers': ['0', '20'],                                            # Range: start index, number of runs
+     'Lengths': ['60', '5400'],                                         # Number and length of segments
      'Folds': '10'}                                                     # Number of Folds to use (folding is by Segment)
 
 # Some Constants
@@ -121,6 +121,7 @@ if __name__ == '__main__':
             schema_idcs = np.equal(S, s)
             run_sizes[run, s] = schema_idcs.sum()
             for fold in range(sF):  # Iterate over folds
+                print('   ------> Fold {}'.format(fold))
                 # Split Training/Validation Sets
                 train_idcs = np.logical_and(np.not_equal(F, fold), schema_idcs)
                 valid_idcs = np.logical_and(np.equal(F, fold), schema_idcs)
@@ -128,19 +129,19 @@ if __name__ == '__main__':
                 label_set = CDTYPES[s].categories.values
                 sL = len(label_set)
                 priors = [np.ones(sL), np.ones([sL, sK * sL])]  # Prior Smoothers of 1s
-                starts = [npext.sum_to_one(np.ones(sL)),        # Starting Probabilities
-                          np.tile(npext.sum_to_one(np.eye(sL, sL) + np.full([sL, sL], fill_value=0.01), axis=1), sK)]
+                starts = [(npext.sum_to_one(np.ones(sL)),        # Starting Probabilities
+                           np.tile(npext.sum_to_one(np.eye(sL, sL) + np.full([sL, sL], fill_value=0.01), axis=1), sK))]
                 # For Legacy Reasons, we need 1-Hot Encoded Data
                 _Y_Hot_train = pd.get_dummies(pd.DataFrame(Y[train_idcs]).astype(CDTYPES[s])).values
                 _Y_Hot_valid = pd.get_dummies(pd.DataFrame(Y[valid_idcs]).astype(CDTYPES[s])).values
                 sM = len(_Y_Hot_train)
                 # Train Model
-                ds_model = AnnotDS([sM, sZ, sK, sU], -1, 100, sink=sys.stdout)
+                ds_model = AnnotDS([sM, sL, sK, sL], -1, 100, sink=sys.stdout)
                 results = ds_model.fit_model(_Y_Hot_train, priors, starts)
                 # Validate Model
-                map_pred = ds_model.estimate_map(results['pi'], results['psi'], _Y_Hot_valid, label_set, sZ)
-                pred_corr[run, s] += np.equal(np.argmax(map_pred, axis=1), Z[valid_idcs]).sum()
-                pred_wght[run, s] += np.log(map_pred[np.arange(len(map_pred)), Z[valid_idcs]]).sum()
+                map_pred = ds_model.estimate_map(results['Pi'], results['Psi'], _Y_Hot_valid, label_set, max_size=sZ)
+                pred_corr[DS, run, s] += np.equal(np.argmax(map_pred, axis=1), Z[valid_idcs]).sum()
+                pred_wght[DS, run, s] += np.log(map_pred[np.arange(len(map_pred)), Z[valid_idcs]]).sum()
 
         # [C] - Train ISAR Model
         print(' - Training ISAR Model (holistically):')
@@ -150,9 +151,9 @@ if __name__ == '__main__':
             train_idcs = np.not_equal(F, fold)
             valid_idcs = np.equal(F, fold)
             priors = [np.ones(sZ), np.ones([sZ, sK, sU])]
-            starts = [npext.sum_to_one(np.ones(sZ)),
-                      np.stack([npext.sum_to_one(np.eye(sZ, sZ) + np.full([sZ, sZ], fill_value=0.01), axis=1)
-                                for _ in range(sK)]).swapaxes(0, 1)]
+            starts = [(npext.sum_to_one(np.ones(sZ)),
+                       np.stack([npext.sum_to_one(np.eye(sZ, sZ) + np.full([sZ, sZ], fill_value=0.01), axis=1)
+                                for _ in range(sK)]).swapaxes(0, 1))]
             # Again, we need one-hot Encoded Data
             _Y_Hot_train = pd.get_dummies(pd.DataFrame(Y[train_idcs]).astype(CDTYPES[4])).values
             _S_Hot_train = pd.get_dummies(pd.Series(S[train_idcs]).astype(CDType(categories=np.arange(sS)))).values
@@ -170,10 +171,10 @@ if __name__ == '__main__':
             for s in range(sS):
                 schema_idcs = np.equal(S, s)
                 _s_valid = np.logical_and(valid_idcs, schema_idcs)
-                pred_corr[run, s] += np.equal(predictions[schema_idcs[valid_idcs]], Z[_s_valid]).sum()
-                pred_wght[run, s] += np.log(pred_likels[schema_idcs[valid_idcs]]).sum()
+                pred_corr[ISAR, run, s] += np.equal(predictions[schema_idcs[valid_idcs]], Z[_s_valid]).sum()
+                pred_wght[ISAR, run, s] += np.log(pred_likels[schema_idcs[valid_idcs]]).sum()
 
     # ===== Finally store the results to File: ===== #
     print('Storing Results to file ... ')
-    np.savez_compressed(args.output[DS], accuracy=pred_corr[DS], log_loss=-pred_wght[DS], sizes=run_sizes)
-    np.savez_compressed(args.output[ISAR], accuracy=pred_corr[ISAR], log_loss=-pred_wght[ISAR], sizes=run_sizes)
+    np.savez_compressed(args.output[DS], accuracy=pred_corr[DS, :, :], log_loss=-pred_wght[DS, :, :], sizes=run_sizes)
+    np.savez_compressed(args.output[ISAR], accuracy=pred_corr[ISAR, :, :], log_loss=-pred_wght[ISAR, :, :], sizes=run_sizes)
