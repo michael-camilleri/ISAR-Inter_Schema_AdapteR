@@ -1,6 +1,6 @@
 ##########################################################################
 ## Script to compare, in simulation, the performance of the ISAC model  ##
-## to plain old NAM, under some Extreme Conditions.                     ##
+## to plain old NAM, under realistic (simulation) conditions.           ##
 ##########################################################################
 
 from pandas.api.types import CategoricalDtype as CDType
@@ -17,7 +17,7 @@ from Models import AnnotDS, AnnotISAR
 
 # Default Parameters
 DEFAULTS = \
-    {'Output': ['../../data/Results_DS', '../../data/Results_ISAR'],    # Result files (one each for DS and ISAR)
+    {'Output': ['../../data/Compare_DS', '../../data/Compare_ISAR2'],   # Result files (one each for DS and ISAR)
      'Random': '0',                                                     # Random Seed offset
      'Numbers': ['0', '20'],                                            # Range: start index, number of runs
      'Lengths': ['60', '5400'],                                         # Number and length of segments
