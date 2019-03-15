@@ -1,7 +1,10 @@
-##########################################################################
-## Script to compare, in simulation, the performance of the ISAC model  ##
-## to plain old NAM, under realistic (simulation) conditions.           ##
-##########################################################################
+"""
+Script to compare, in simulation, the performance of the ISAC model to plain old DS, under realistic (simulation)
+conditions.
+
+The Simulation process does not generate any Missing-At-Random data, and hence, in this case, all Samples where the
+assigned annotator does not provide a label, are interpreted as NIS.
+"""
 
 from pandas.api.types import CategoricalDtype as CDType
 from itertools import cycle
@@ -124,7 +127,7 @@ if __name__ == '__main__':
                 label_set = CDTYPES[s].categories.values
                 sL = len(label_set)
                 priors = [np.ones(sL), np.ones([sL, sK * sL])]  # Prior Smoothers of 1s
-                starts = [(npext.sum_to_one(np.ones(sL)),        # Starting Probabilities
+                starts = [(npext.sum_to_one(np.ones(sL)),       # Starting Probabilities
                            np.tile(npext.sum_to_one(np.eye(sL, sL) + np.full([sL, sL], fill_value=0.01), axis=1), sK))]
                 # For Legacy Reasons, we need 1-Hot Encoded Data
                 _Y_Hot_train = pd.get_dummies(pd.DataFrame(Y[train_idcs]).astype(CDTYPES[s])).values
@@ -138,9 +141,11 @@ if __name__ == '__main__':
                 pred_corr[DS, run, s] += np.equal(np.argmax(map_pred, axis=1), Z[valid_idcs]).sum()
                 pred_wght[DS, run, s] += np.log(map_pred[np.arange(len(map_pred)), Z[valid_idcs]]).sum()
 
-        # [C] - Train ISAR Model - but first, we have to identify NIS
+        # [C] - Train ISAR Model - but first, we have to identify NIS (i.e. when the responsible annotators do not
+        #       provide a label.
         for nt in range(sN*sT):
-            if np.isnan(Y[nt, A[nt, :]]).all(): Y[nt, A[nt, :]] = NIS
+            for a in A[nt, :]:
+                if np.isnan(Y[nt, a]): Y[nt, a] = NIS # If we are putting all as NIS
         print(' - Training ISAR Model (holistically):')
         for fold in range(sF):  # Iterate over folds
             print(' ---> Fold {}'.format(fold))
@@ -151,17 +156,11 @@ if __name__ == '__main__':
             starts = [(npext.sum_to_one(np.ones(sZ)),
                        np.stack([npext.sum_to_one(np.eye(sZ, sZ) + np.full([sZ, sZ], fill_value=0.01), axis=1)
                                 for _ in range(sK)]).swapaxes(0, 1))]
-            # Again, we need one-hot Encoded Data
-            _Y_Hot_train = pd.get_dummies(pd.DataFrame(Y[train_idcs]).astype(CDTYPES[4])).values
-            _S_Hot_train = pd.get_dummies(pd.Series(S[train_idcs]).astype(CDType(categories=np.arange(sS)))).values
-            _Y_Hot_valid = pd.get_dummies(pd.DataFrame(Y[valid_idcs]).astype(CDTYPES[4])).values
-            _S_Hot_valid = pd.get_dummies(pd.Series(S[valid_idcs]).astype(CDType(categories=np.arange(sS)))).values
-            sM = len(_Y_Hot_train)
             # Train Model
             isar_model = AnnotISAR(omega, -1, 100, sink=sys.stdout)
-            results = isar_model.fit_model(_Y_Hot_train, _S_Hot_train, priors, starts)
+            results = isar_model.fit_model(Y[train_idcs], S[train_idcs], priors, starts)
             # Validate Model
-            m_omega = AnnotISAR.msg_omega(omega, _Y_Hot_valid, _S_Hot_valid)
+            m_omega = AnnotISAR.omega_msg(omega, Y[valid_idcs], S[valid_idcs])
             map_pred = isar_model.estimate_map(results.Pi, results.Psi, m_omega, None)
             predictions = np.argmax(map_pred, axis=1)
             pred_likels = map_pred[np.arange(len(map_pred)), Z[valid_idcs]]

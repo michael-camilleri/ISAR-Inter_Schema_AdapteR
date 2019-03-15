@@ -1,9 +1,14 @@
-##########################################################################
-## Script to analyse the ability of ISAR to learn the true parameters   ##
-## the data-generating process.                                         ##
-## Note that while the script allows some flexibility, it should        ##
-## probably not combine sizes < [13, 11] with non extreme scenarios.    ##
-##########################################################################
+"""
+Script to analyse the ability of ISAR to learn the true parameters the data-generating process.
+
+Note that while the script allows some flexibility, it should probably not combine sizes < [13, 11] with non extreme
+(one-vs-rest) scenarios.
+
+Note also that in these simulations, it is (again) assumed that each annotator either labels a segment or puts NIS.
+This stems from our modelling behaviour, in that if the annotator does not label the sample it is solely because it is
+not in-schema (i.e. we do not model missing-at-random behaviour.
+"""
+
 
 from pandas.api.types import CategoricalDtype as CDType
 import pandas as pd
@@ -65,10 +70,11 @@ if __name__ == '__main__':
     args.random = int(args.random)
     run_offset = int(args.numbers[0])
     run_length = int(args.numbers[1])
-    args.steps = [float(s) for s in args.steps]
+    args.increments = [float(s) for s in args.increments]
     sN, sT = [int(l) for l in args.lengths]
     sZ, sK = [int(s) for s in args.sizes]
     sU = sZ
+    NIS = sZ  # NIS Label
 
     # ==== Load/Prepare the Data ==== #
     with np.load('../../data/model.mrc.npz') as _data:
@@ -102,12 +108,12 @@ if __name__ == '__main__':
     # ---- Prepare Storage ---- #
     # Basically, for each parameter, we index by run, then progression in number of steps and finally the dimensions of
     #  the parameter itself.
-    pi_true = np.empty([run_length, sZ])                    # True Values
-    pi_isar = np.empty([run_length, len(args.steps), sZ])   # As learnt using ISAR
-    pi_full = np.empty([run_length, len(args.steps), sZ])   # As learnt from fully-observeable data
+    pi_true = np.empty([run_length, sZ])                         # True Values
+    pi_isar = np.empty([run_length, len(args.increments), sZ])   # As learnt using ISAR
+    pi_full = np.empty([run_length, len(args.increments), sZ])   # As learnt from fully-observeable data
     psi_true = np.empty([run_length, sZ, sK, sU])
-    psi_isar = np.empty([run_length, len(args.steps), sZ, sK, sU])
-    psi_full = np.empty([run_length, len(args.steps), sZ, sK, sU])
+    psi_isar = np.empty([run_length, len(args.increments), sZ, sK, sU])
+    psi_full = np.empty([run_length, len(args.increments), sZ, sK, sU])
 
     # --- Iterate over Runs ---- #
     for run in range(run_offset, run_offset + run_length):
@@ -117,6 +123,7 @@ if __name__ == '__main__':
         np.random.seed(args.random + run)
 
         # [A] - Generate Data
+        print(' - Generating Data:')
         # Add some noise to Parameters to introduce some randomness
         if run == run_offset:
             Pi = pi
@@ -129,34 +136,17 @@ if __name__ == '__main__':
         # Schema - need to handle different cases
         S = np.repeat(np.random.choice(sS, size=[sN, sK], p=PDF_SCHEMA), sT, axis=0) if args.different else \
             np.repeat(np.random.choice(sS, size=sN, p=PDF_SCHEMA), sT)
-        # The Observations, we have to do per-sample
+        # The Observations, we have to do per-sample due to the ancestral sampling nature.
         U = np.full([sN*sT, sK], fill_value=np.NaN)
         Y = np.full([sN*sT, sK], fill_value=np.NaN)
-        for n in range(sN):
-            A = np.random.choice(sK, size=nA, replace=False, p=PDF_ANNOT) # Decide on Annotators
-            for t in range(sT):
-                _t_i = n*sT + t  # Time Instant
+        for n in range(sN):  # Iterate over all segments
+            A_nt = np.random.choice(sK, size=nA, replace=False, p=PDF_ANNOT)  # Annotators
+            for nt in range(n*sT, (n+1)*sT):    # Iterate over time-instances in this Segment
+                for k in A_nt:    # Iterate over Annotators chosen in this time-instant
+                    U[nt, k] = np.random.choice(sU, p=psi[Z[nt], k, :])            # Compute Annotator Confusion
+                    Y[nt, k] = U[nt, k] if (omega[S[nt], int(U[nt, k]), int(U[nt, k])] == 1) else NIS  # Project
 
-                # Iterate over Annotators chosen
-                nis = not(NIS_ALL)
-                for k in A:
-                    # Check Schema for this annotator
-                    s = S[_t_i, k] if SperK else S[_t_i]
-
-                    # Compute Annotator Emission
-                    u_k = np.random.choice(sU, p=Psi[Z[_t_i], k, :])
-
-                    # Compute Observation (if in schema)
-                    if Xi[s, u_k, u_k] == 1:
-                        nis = False
-                        X[_t_i, k] = u_k
-                    elif NIS_ALL:
-                        X[_t_i, k] = NIS_idx
-
-                # Now potentially assign NIS
-                if nis:
-                    X[_t_i, A] = NIS_idx
-
+        # [B] - Attempt Learning
 
 #
 # if __name__ == '__main__':

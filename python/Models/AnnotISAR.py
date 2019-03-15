@@ -1,6 +1,8 @@
 """
 This is the ISAR Model, applied to the Crowd-sourcing task where P(U|Z) is a mixture of categorical distributions
 according to the Dawid-Skene Model.
+
+TODO: Use JiT Compilation on some of the for-loops
 """
 from collections import namedtuple
 import numpy as np
@@ -173,18 +175,18 @@ class AnnotISAR(WorkerHandler):
         self.__sink.write(*args)
         self.__sink.flush()
 
-    def fit_model(self, data_hot, schema, prior, _starts=1):
+    def fit_model(self, Y, S, prior, _starts=1):
         """
         Fit the Parameters Pi/Psi to the data, and generate MAP estimates for the latent behaviour:
 
-        :param data_hot:        One-Hot Encoded Observations: [N by K * |X|]
-        :param schema:          Schema for each sample (one-hot encoded): [N]
-        :param prior:           Prior Probabilities for Pi and Psi (|Z|, [|Z| by K by |U|]): Note these must be raw
-                                (smoothing) counts (equivalent to [alpha-1] in Dirichlet prior formulation)
-        :param _starts:         This can be either:
-                                    * Integer - Number of random starts to perform
-                                    * List of Starting points (each starting point should be a tuple/list, containing
-                                        the starting phi/psi matrices.
+        :param Y:        Annotator provided labels [N by |K|]
+        :param S:        Schema for each sample (one-hot encoded): [N]
+        :param prior:    Prior Probabilities for Pi and Psi (|Z|, [|Z| by K by |U|]): Note these must be raw (smoothing)
+                            counts (equivalent to [alpha-1] in Dirichlet prior formulation)
+        :param _starts:  This can be either:
+                            * Integer - Number of random starts to perform
+                            * List of Starting points (each starting point should be a tuple/list, containing the
+                              starting pi/psi matrices.
         :return:    NamedTuple of Type ISACResults
                         * ModelDims: Model Dimensions [|Z|, K, |S|, |X|]
                         * DataDims:  Data Dimensions [N]
@@ -210,7 +212,7 @@ class AnnotISAR(WorkerHandler):
         # First Generate the M_Xi message
         self._write('Generating Latent-State Message (M_Omega)')
         self.start_timer('m_omega')
-        _M_Omega = self.msg_omega(self.Omega, data_hot, schema)
+        _M_Omega = self.omega_msg(self.Omega, Y, S)
         self.stop_timer('m_omega')
         self._write('... Done\n')
 
@@ -218,9 +220,9 @@ class AnnotISAR(WorkerHandler):
         self._write('Running EM:\n')
         self.start_timer('em')
         results = self.RunWorkers(workers, self.EMWorker,
-                                  _configs= self.EMWorker.ComputeCommon_t(max_iter=self.__max_iter,
-                                                                          tolerance=self.__toler, m_omega=_M_Omega,
-                                                                          prior_pi=prior[0], prior_psi=prior[1]),
+                                  _configs=self.EMWorker.ComputeCommon_t(max_iter=self.__max_iter,
+                                                                         tolerance=self.__toler, m_omega=_M_Omega,
+                                                                         prior_pi=prior[0], prior_psi=prior[1]),
                                   _args=_starts)
         self.stop_timer('em')
 
@@ -234,8 +236,8 @@ class AnnotISAR(WorkerHandler):
                                                                                             self.elapsed('em')/workers))
 
         # Build (and return) Information Structure
-        return self.AISARResults_t(ModelDims=[len(prior[0]), _M_Omega.shape[1], schema.shape[1], self.Omega.shape[2]],
-                                   DataDims=len(data_hot), Pi=results.Pi, Psi=results.Psi, BestRun=results.Best,
+        return self.AISARResults_t(ModelDims=[len(prior[0]), _M_Omega.shape[1], self.Omega.shape[0], self.Omega.shape[2]],
+                                   DataDims=len(Y), Pi=results.Pi, Psi=results.Psi, BestRun=results.Best,
                                    Converged=results.Converged, LogLikelihood=results.LogLikelihood,
                                    Times={'Total': self.elapsed('global'), 'Message': self.elapsed('m_omega'),
                                           'EM': self.elapsed('em')}, LLEvolutions=results.LLEvolutions)
@@ -290,28 +292,9 @@ class AnnotISAR(WorkerHandler):
                                     LLEvolutions=_evol_llik)
 
     @staticmethod
-    def msg_omega(omega, _hot, _schema):
+    def omega_msg(omega, Y, S):
         """
-        Generate M_omega Message
-
-        This can be done once at the start, and then used throughout
-        :param omega:   Schema-Specific Emission Probabilities [|S| by |U| by |X|]
-        :param _hot:    Schema-Specific One-Hot Encoded Data [N by |K|*|X|]
-        :param _schema: The schema (1-Hot Encoded) [N by |S|]
-        :return:        N by K by |U| matrix
-        """
-        # Reshape:
-        _Ns = _hot.shape[0]
-        _Xs = omega.shape[-1]
-        _Ks = np.int(_hot.shape[1]/_Xs)
-        _hot = np.reshape(_hot, (_Ns, _Ks, _Xs))
-        _X_pow = np.power(omega[np.newaxis, np.newaxis, :, :, :], _hot[:, :, np.newaxis, np.newaxis, :]).prod(axis=4)
-        return np.power(_X_pow, _schema[:, np.newaxis, :, np.newaxis]).prod(axis=2)
-
-    @staticmethod
-    def msg_omega_update(omega, Y, S):
-        """
-        Generate M_Omega Message: alternative method when S is individually specified per annotator.
+        Generate M_Omega Message:
 
         :param omega:  Schema-Specific Emission Probabilities [|S| by |U| by |Y|]
         :param Y:      Annotator Labels: np.NaN if unlabelled [N by |K|]
