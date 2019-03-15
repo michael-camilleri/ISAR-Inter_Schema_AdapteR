@@ -22,10 +22,10 @@ from Tools import npext
 from Models import AnnotISAR
 
 # Default Parameters
-DEFAULTS = {'Output':  ['../../data/Parameters_ISAR'],    # Result File
+DEFAULTS = {'Output':  '../../data/Parameters_ISAR',      # Result File
             'Random':  '0',                               # Random Seed offset
             'Numbers': ['0', '20'],                       # Range: start index, number of runs
-            'Lengths': ['60', '5400'],                    # Number and length of segments
+            'Lengths': ['60', '540'],                    # Number and length of segments
             'Sizes':   ['13', '11'],                      # Dimensionality of the data: sZ/sK
             'Steps':   ['0.001', '0.005', '0.01', '0.05', '0.1', '0.5', '1.0']  # Step Sizes
             }
@@ -110,10 +110,11 @@ if __name__ == '__main__':
     #  the parameter itself.
     pi_true = np.empty([run_length, sZ])                         # True Values
     pi_isar = np.empty([run_length, len(args.increments), sZ])   # As learnt using ISAR
-    pi_full = np.empty([run_length, len(args.increments), sZ])   # As learnt from fully-observeable data
+    pi_full = np.zeros([run_length, len(args.increments), sZ])   # As learnt from fully-observeable data
     psi_true = np.empty([run_length, sZ, sK, sU])
     psi_isar = np.empty([run_length, len(args.increments), sZ, sK, sU])
-    psi_full = np.empty([run_length, len(args.increments), sZ, sK, sU])
+    psi_full = np.zeros([run_length, len(args.increments), sZ, sK, sU])
+    sizes = np.zeros([run_length, len(args.increments)], dtype=int) # Sizes of the Data
 
     # --- Iterate over Runs ---- #
     for run in range(run_offset, run_offset + run_length):
@@ -131,6 +132,9 @@ if __name__ == '__main__':
         else:
             Pi = npext.sum_to_one(pi + np.random.uniform(0.0, 0.05, size=sZ))
             Psi = npext.sum_to_one(psi + np.random.uniform(0.0, 0.05, size=[sZ, sK, sU]), axis=-1)
+        # Keep Track of Parameters
+        pi_true[run, :] = Pi
+        psi_true[run, :, :, :] = Psi
         # Latent State
         Z = np.random.choice(sZ, size=sN * sT, p=Pi)  # Latent State
         # Schema - need to handle different cases
@@ -145,84 +149,49 @@ if __name__ == '__main__':
                 for k in A_nt:    # Iterate over Annotators chosen in this time-instant
                     U[nt, k] = np.random.choice(sU, p=psi[Z[nt], k, :])            # Compute Annotator Confusion
                     Y[nt, k] = U[nt, k] if (omega[S[nt], int(U[nt, k]), int(U[nt, k])] == 1) else NIS  # Project
+        # And Shuffle all to avoid same sizes when
+        permutation = np.random.permutation(sN*sT)
+        Z = Z[permutation]
+        S = S[permutation, :] if args.different else S[permutation]
+        U = U[permutation, :]
+        Y = Y[permutation, :]
 
-        # [B] - Attempt Learning
+        # [B] - Learn using fully-labelled Data
+        print(' - Learning using fully-observed Data')
+        for i, inc in enumerate(args.increments):
+            # Extract Sub-Set to operate on
+            sizes[run, i] = int(inc * sN * sT)
+            z_i = Z[:sizes[run, i]]
+            u_i = U[:sizes[run, i], :]
+            # Train Pi: basically relative counts of all latent-states
+            idcs, cnts = np.unique(z_i, return_counts=True)
+            pi_full[run, i, idcs] = npext.sum_to_one(cnts)
+            # Train Psi:
+            for z in range(sZ):
+                U_z = U[Z == z]      # Extract only where Z is equal to z
+                for k in range(sK):
+                    U_kz = U_z[:, k]
+                    idcs, cnts = np.unique(U_kz[~np.isnan(U_kz)], return_counts=True)
+                    psi_full[run, i, z, k, idcs.astype(int)] = npext.sum_to_one(cnts)
 
-#
-# if __name__ == '__main__':
-#
-#     r_start = 0
-#     r_len = 20
-#
-#     for run in range(r_start, r_start + r_len):
-#         print('Simulating Run ', run)
-#
-#
-#
-#         # ================= GENERATE DATA ================= #
-#         # Data
-#         Z = np.random.choice(sZ, size=[sN*sT], p=Pi)                                    # Latent State
-#         if SperK:
-#                # Schema
-#         else:
-#             S =
-#         X =                                # Observed
-#
-#         # Now do per-sample
-#
-#
-#
-#
-#         # Now Prepare for way amenable to models
-#         if SperK:
-#             _msg_xi = ISAC.msg_xi_update(Xi, X, S)
-#         else:
-#             _labels_hot = pd.get_dummies(pd.DataFrame(X).astype(CDType(categories=np.arange(sX)))).values
-#             _schema_hot = pd.get_dummies(pd.Series(S).astype(CDType(categories=np.arange(sS)))).values
-#             _msg_xi = ISAC.msg_xi(Xi, _labels_hot, _schema_hot)
-#
-#         # Now Permute
-#         np.random.shuffle(_msg_xi)
-#
-#         # Keep Track of Parameters
-#         with shelve.open(os.path.join(Const['Results.Scratch'], DUMP_NAME.format(run)), 'n') as storage:
-#             storage['Dims'] = [sZ, sK, sU, sX, sS]
-#             storage['Z'] = Z
-#             storage['S'] = S
-#             storage['X_ISAC'] = X
-#             storage['True'] = {'Pi': Pi, 'Psi': Psi}
-#
-#
-#             # ================= TRAIN MODELS ================= #
-#             print('Training Run ', run)
-#
-#             _pi = {}
-#             _psi = {}
-#             _pred = {}
-#             for _sub_per in DATA_PERC:
-#                 print('Training on {:.1f}% of the Data'.format(_sub_per*100.0))
-#                 # Extract Sub-Set to operate on
-#                 _sub_set = _msg_xi[:int(_sub_per * sN * sT), :]
-#
-#                 # Data
-#                 if Xi is None:
-#                     _common = None
-#                 else:
-#                     _common = ISAC.EMWorker.ComputeCommon_t(max_iter=200, tolerance=1e-4, update_rate=3, m_xi=_sub_set,
-#                                                             prior_phi=np.ones(sZ), prior_psi=np.ones([sZ, sK, sU]))
-#                 _data = [npext.sum_to_one(np.ones(sZ)),
-#                          np.stack(npext.sum_to_one(np.eye(sZ, sZ) + np.full([sZ, sZ], fill_value=0.01), axis=1)
-#                                   for _ in range(sK)).swapaxes(0, 1)]
-#
-#                 # Now Train ISAC Model
-#                 tester = Tester()
-#                 isac_worker = ISAC.EMWorker(0, tester)
-#                 results = isac_worker.parallel_compute(_common, _data)
-#
-#                 # Now Store Data for later retrieval
-#                 _pi[_sub_per] = results.Phi
-#                 _psi[_sub_per] = results.Psi
-#                 _pred[_sub_per] = ISAC.estimate_map(results.Phi, results.Psi, _sub_set, np.arange(sZ))
-#
-#             storage['Learnt'] = {'Pi': _pi, 'Psi': _psi}
-#             storage['Pred'] = _pred
+        # [C] - Learn using ISAR
+        print(' - Learning using ISAR')
+        for i, inc in enumerate(args.increments):
+            # Extract Sub-Set(s) to operate on
+            y_i = Y[:sizes[run, i], :]
+            s_i = S[:sizes[run, i], :] if args.different else S[:sizes[run, i]]
+            priors = [np.ones(sZ), np.ones([sZ, sK, sU])]
+            starts = [(npext.sum_to_one(np.ones(sZ)),
+                       np.stack([npext.sum_to_one(np.eye(sZ, sZ) + np.full([sZ, sZ], fill_value=0.01), axis=1)
+                                 for _ in range(sK)]).swapaxes(0, 1))]
+            # Train ISAR Model
+            isar_model = AnnotISAR(omega, -1, 100, sink=sys.stdout)
+            results = isar_model.fit_model(y_i, s_i, priors, starts)
+            # Store results
+            pi_isar[run, i, :] = results.Pi
+            psi_isar[run, i, :, :, :] = results.Psi
+
+    # ===== Finally store the results to File: ===== #
+    print('Storing Results to file ... ')
+    np.savez_compressed(args.output, Pi_true=pi_true, Pi_full=pi_full, Pi_isar=pi_isar, Psi_true=psi_true,
+                        Psi_full=psi_full, Psi_isar=psi_isar, Sizes=sizes)

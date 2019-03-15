@@ -1,5 +1,5 @@
 """
-Script to Visualise the Results of Training DS/ISAR Models on the MRC Harwell Data
+Script to Visualise the Results of Training DS/ISAR Models on the MRC Harwell Data (after Learn_Compare)
 """
 from scipy.stats import ttest_rel
 import numpy as np
