@@ -24,6 +24,7 @@ DEFAULTS = {'Output':  ['../../data/Parameters_ISAR'],    # Result File
             'Sizes':   ['13', '11'],                      # Dimensionality of the data: sZ/sK
             'Steps':   ['0.001', '0.005', '0.01', '0.05', '0.1', '0.5', '1.0']  # Step Sizes
             }
+nA = 3
 
 if __name__ == '__main__':
 
@@ -98,85 +99,65 @@ if __name__ == '__main__':
             PDF_SCHEMA = npext.sum_to_one([13, 15, 17, 10])                            # Probability over Schemas
 
     # ==== Simulate (and Learn) Model(s) ==== #
+    # ---- Prepare Storage ---- #
+    # Basically, for each parameter, we index by run, then progression in number of steps and finally the dimensions of
+    #  the parameter itself.
+    pi_true = np.empty([run_length, sZ])                    # True Values
+    pi_isar = np.empty([run_length, len(args.steps), sZ])   # As learnt using ISAR
+    pi_full = np.empty([run_length, len(args.steps), sZ])   # As learnt from fully-observeable data
+    psi_true = np.empty([run_length, sZ, sK, sU])
+    psi_isar = np.empty([run_length, len(args.steps), sZ, sK, sU])
+    psi_full = np.empty([run_length, len(args.steps), sZ, sK, sU])
+
+    # --- Iterate over Runs ---- #
+    for run in range(run_offset, run_offset + run_length):
+        print('Executing Simulation Run: {} ...'.format(run))
+
+        # Seed with Random Offset + run value
+        np.random.seed(args.random + run)
+
+        # [A] - Generate Data
+        # Add some noise to Parameters to introduce some randomness
+        if run == run_offset:
+            Pi = pi
+            Psi = psi
+        else:
+            Pi = npext.sum_to_one(pi + np.random.uniform(0.0, 0.05, size=sZ))
+            Psi = npext.sum_to_one(psi + np.random.uniform(0.0, 0.05, size=[sZ, sK, sU]), axis=-1)
+        # Latent State
+        Z = np.random.choice(sZ, size=sN * sT, p=Pi)  # Latent State
+        # Schema - need to handle different cases
+        S = np.repeat(np.random.choice(sS, size=[sN, sK], p=PDF_SCHEMA), sT, axis=0) if args.different else \
+            np.repeat(np.random.choice(sS, size=sN, p=PDF_SCHEMA), sT)
+        # The Observations, we have to do per-sample
+        U = np.full([sN*sT, sK], fill_value=np.NaN)
+        Y = np.full([sN*sT, sK], fill_value=np.NaN)
+        for n in range(sN):
+            A = np.random.choice(sK, size=nA, replace=False, p=PDF_ANNOT) # Decide on Annotators
+            for t in range(sT):
+                _t_i = n*sT + t  # Time Instant
+
+                # Iterate over Annotators chosen
+                nis = not(NIS_ALL)
+                for k in A:
+                    # Check Schema for this annotator
+                    s = S[_t_i, k] if SperK else S[_t_i]
+
+                    # Compute Annotator Emission
+                    u_k = np.random.choice(sU, p=Psi[Z[_t_i], k, :])
+
+                    # Compute Observation (if in schema)
+                    if Xi[s, u_k, u_k] == 1:
+                        nis = False
+                        X[_t_i, k] = u_k
+                    elif NIS_ALL:
+                        X[_t_i, k] = NIS_idx
+
+                # Now potentially assign NIS
+                if nis:
+                    X[_t_i, A] = NIS_idx
 
 
-
-
-#
-# sK = len(PDF_ANNOT)
-# PDF_SCHEMA =
-
-# #
-#
-# # Chose the Simulation Type
-# #   * 0 = Extreme Case: 1 schema per label with inter-annotator disagreement
-# #   * 1 = Realistic Case: Real-Schema configuration
-#
-# SIM_TYPE = 0
-# FLIP = 2 # -1 #
-#
-# # Testing Parameters
-# DUMP_NAME = 'SYNTH_{0:03d}'
-# DATA_PERC = [1.0] #
-#
-# # Simulation Parameters
-# if SIM_TYPE == 0:
-#     sN = 500  # Number of Segments to generate
-#     sZ = 7    # Number of Latent States
-#     sT = 100  # Number of samples per segment
-#     sU = 7    # Number of Annotator States
-#     sX = 8    # Includes NIS
-#     nA = 3    # Number of Annotators in any one sample
-#     sK = 6    # Number of Annotators
-#     sS = 7    # Number of Schemas
-#
-#     SperK = True    # Whether to simulate a different schema per annotator...
-#
-#     pAnnot =    # Probability over Annotators
-#     pSchema =   # Probability over Schemas
-#     Xi =
-#
-#     NIS_ALL = True
-#
-# elif SIM_TYPE == 1:
-#     sN = 60   # Number of Segments to generate
-#     sZ = 13   # Number of Latent States
-#     sT = 5400 # Number of samples per segment
-#     sU = 13   # Number of Annotator States
-#     sX = 14   # Includes NIS
-#     nA = 3    # Number of Annotators in any one sample
-#     sK = 11   # Number of Annotators
-#     sS = 4    # Number of Schemas
-#
-#     SperK = False  # Whether to simulate a different schema per annotator...
-#
-#     pAnnot = npext.sum_to_one([49, 31, 11, 4, 10, 25, 9, 7, 6, 3, 3])  # Probability over Annotators
-#     pSchema = npext.sum_to_one([13, 15, 17, 10])                       # Probability over Schemas
-#     Xi = np.load(os.path.join(Const['Data.Clean'], 'XI.npy'))
-#
-#     NIS_ALL = True
-# else:
-#     pSchema = []
-#     pAnnot = []
-#     Xi = None
-#     sN = None  # Number of Segments to generate
-#     sZ = None  # Number of Latent States
-#     sT = None  # Number of samples per segment
-#     sU = None  # Number of Annotator States
-#     sX = None  # Includes NIS
-#     nA = None  # Number of Annotators in any one sample
-#     sK = None  # Number of Annotators
-#     sS = None  # Number of Schemas
-#     SperK = None  # Whether to simulate a different schema per annotator...
-#     NIS_ALL = None
-#
-# NIS_idx = sZ  # NIS Index
-#
-# # Load the Parameters from the real-data
-# _Pi = np.load(os.path.join(Const['Data.Clean'], 'PHI.npy'))
-# _Psi = np.load(os.path.join(Const['Data.Clean'], 'PSI.npy'))
-#
-#
 #
 # if __name__ == '__main__':
 #
@@ -186,51 +167,21 @@ if __name__ == '__main__':
 #     for run in range(r_start, r_start + r_len):
 #         print('Simulating Run ', run)
 #
-#         if run == r_start:
-#             Pi = npext.sum_to_one(_Pi[:sZ])
-#             Psi = npext.sum_to_one(_Psi[:sZ, :sK, :sU], axis=-1)
-#         else:
-#             Pi = npext.sum_to_one(_Pi[:sZ] + np.random.uniform(0.0, 0.05, size=sZ))
-#             Psi = npext.sum_to_one(_Psi[:sZ, :sK, :sU] + np.random.uniform(0.0, 0.05, size=[sZ, sK, sU]), axis=-1)
+#
 #
 #         # ================= GENERATE DATA ================= #
 #         # Data
 #         Z = np.random.choice(sZ, size=[sN*sT], p=Pi)                                    # Latent State
 #         if SperK:
-#             S = np.repeat(np.random.choice(sS, size=[sN, sK], p=pSchema), sT, axis=0)   # Schema
+#                # Schema
 #         else:
-#             S = np.repeat(np.random.choice(sS, size=sN, p=pSchema), sT)
-#         X = np.full(shape=[sN*sT, sK], fill_value=np.NaN)                               # Observed
+#             S =
+#         X =                                # Observed
 #
 #         # Now do per-sample
-#         for n in range(sN):
-#             # Decide on Annotators
-#             A = np.random.choice(sK, size=nA, replace=False, p=pAnnot)
 #
-#             # Iterate over Time
-#             for t in range(sT):
-#                 # Time Instant
-#                 _t_i = n*sT + t
 #
-#                 # Iterate over Annotators chosen
-#                 nis = not(NIS_ALL)
-#                 for k in A:
-#                     # Check Schema for this annotator
-#                     s = S[_t_i, k] if SperK else S[_t_i]
 #
-#                     # Compute Annotator Emission
-#                     u_k = np.random.choice(sU, p=Psi[Z[_t_i], k, :])
-#
-#                     # Compute Observation (if in schema)
-#                     if Xi[s, u_k, u_k] == 1:
-#                         nis = False
-#                         X[_t_i, k] = u_k
-#                     elif NIS_ALL:
-#                         X[_t_i, k] = NIS_idx
-#
-#                 # Now potentially assign NIS
-#                 if nis:
-#                     X[_t_i, A] = NIS_idx
 #
 #         # Now Prepare for way amenable to models
 #         if SperK:

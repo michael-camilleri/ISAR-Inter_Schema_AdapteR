@@ -308,31 +308,33 @@ class AnnotISAR(WorkerHandler):
         _X_pow = np.power(omega[np.newaxis, np.newaxis, :, :, :], _hot[:, :, np.newaxis, np.newaxis, :]).prod(axis=4)
         return np.power(_X_pow, _schema[:, np.newaxis, :, np.newaxis]).prod(axis=2)
 
-    # @staticmethod
-    # def msg_xi_update(_xi, _X, _S):
-    #     """
-    #     Generate M_Xi Message
-    #
-    #     This can be done once at the start, and then used throughout.
-    #
-    #     :param _xi:     Schema-Specific Emission Probabilities [|S| by |U| by |X|]
-    #     :param _X:      Annotator Labels: np.NaN if unlabelled [N by |K|]
-    #     :param _S:      The Schema used by the Annotator [N by |K|]
-    #     :return:        N by K by |U| matrix
-    #     """
-    #     # Get the Dimensionality of the Problem
-    #     _sN = _X.shape[0]
-    #     _sK = _X.shape[1]
-    #     _sU = _xi.shape[1]
-    #
-    #     # Now iterate over samples
-    #     _M_Xi = np.empty([_sN, _sK, _sU])
-    #     for n in range(_sN):
-    #         for k in range(_sK):
-    #             _M_Xi[n, k, :] = np.ones(_sU) if np.isnan(_X[n, k]) else _xi[int(_S[n, k]), :, int(_X[n, k])]
-    #
-    #     # Return
-    #     return _M_Xi
+    @staticmethod
+    def msg_omega_update(omega, Y, S):
+        """
+        Generate M_Omega Message: alternative method when S is individually specified per annotator.
+
+        :param omega:  Schema-Specific Emission Probabilities [|S| by |U| by |Y|]
+        :param Y:      Annotator Labels: np.NaN if unlabelled [N by |K|]
+        :param S:      The Schema used by the Annotator [N by |K|] or [N] if S is common per annotator.
+        :return:       N by K by |U| matrix
+        """
+        # Get the Dimensionality of the Problem
+        sN, sK = Y.shape
+        sU = omega.shape[1]
+        sch_per_ann = (len(S.shape) == 2)
+        # Now iterate over samples
+        m_omega = np.empty([sN, sK, sU])
+        if sch_per_ann:
+            for n in range(sN):
+                for k in range(sK):
+                    m_omega[n, k, :] = np.ones(sU) if np.isnan(Y[n, k]) else omega[int(S[n, k]), :, int(Y[n, k])]
+        else:
+            for n in range(sN):
+                for k in range(sK):
+                    m_omega[n, k, :] = np.ones(sU) if np.isnan(Y[n, k]) else omega[int(S[n]), :, int(Y[n, k])]
+
+        # Return
+        return m_omega
 
     @staticmethod
     def estimate_map(pi, psi, m_omega, label_set):

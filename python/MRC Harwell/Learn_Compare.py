@@ -17,7 +17,7 @@ from Models import AnnotDS, AnnotISAR
 
 # Default Parameters
 DEFAULTS = \
-    {'Output': ['../../data/Compare_DS', '../../data/Compare_ISAR2'],   # Result files (one each for DS and ISAR)
+    {'Output': ['../../data/Compare_DS', '../../data/Compare_ISAR'],    # Result files (one each for DS and ISAR)
      'Random': '0',                                                     # Random Seed offset
      'Numbers': ['0', '20'],                                            # Range: start index, number of runs
      'Lengths': ['60', '5400'],                                         # Number and length of segments
@@ -77,6 +77,7 @@ if __name__ == '__main__':
     # ---- Extract Sizes ---- #
     sZ, sK, sU = psi.shape       # Latent Model [Z, #Annotators, U]
     sS, _, sY = omega.shape      # Number of Schemas and Observeable Labels
+    NIS = sZ                     # NIS Label
     iterator = cycle(range(sF))  # Fold Iterator
 
     # ==== Simulate (and Learn) Model(s) ==== #
@@ -95,24 +96,18 @@ if __name__ == '__main__':
 
         # [A] - Generate Data
         print(' - Generating Data:')
-        Z = np.random.choice(sZ, size=sN*sT, p=pi)                      # Latent State
-        S = np.repeat(np.random.choice(sS, size=sN, p=PDF_SCHEMA), sT)  # Schema
-        F = np.repeat([next(iterator) for _ in range(sN)], sT)          # Folds: split uniformly sequentially
-        Y = np.full(shape=[sN * sT, sK], fill_value=np.NaN)             # Observations
-
+        Z = np.random.choice(sZ, size=sN*sT, p=pi)                                          # Latent State
+        S = np.repeat(np.random.choice(sS, size=sN, p=PDF_SCHEMA), sT)                      # Schema
+        F = np.repeat([next(iterator) for _ in range(sN)], sT)                              # Folds: sequentially
         # With regards to the observations, have to do on a sample-by-sample basis.
-        for n in range(sN):
-            # Decide on nA Annotators: these are fixed for the segment
-            A = np.random.choice(sK, size=nA, replace=False, p=PDF_ANNOT)
-            # Iterate over Time (within segment)
-            for t in range(sT):
-                # Time Instant
-                _t_i = n*sT + t
-                # Iterate over Annotators chosen
-                for k in A:
-                    s = S[_t_i]                                       # Check Schema for this annotator
-                    u_k = np.random.choice(sU, p=psi[Z[_t_i], k, :])  # Compute Annotator Emission (confusion)
-                    if omega[s, u_k, u_k] == 1: Y[_t_i, k] = u_k      # Compute Observation (if in schema)
+        Y = np.full([sN * sT, sK], fill_value=np.NaN)   # Observations Matrix
+        A = np.empty([sN * sT, nA], dtype=int)          # Annotator Selection Matrix
+        for n in range(sN):  # Iterate over all segments
+            A[n*sT:(n+1)*sT, :] = np.random.choice(sK, size=nA, replace=False, p=PDF_ANNOT)  # Annotators
+            for nt in range(n*sT, (n+1)*sT):    # Iterate over time-instances in this Segment
+                for k in A[nt]:    # Iterate over Annotators chosen in this time-instant
+                    u_k = np.random.choice(sU, p=psi[Z[nt], k, :])  # Compute Annotator Emission (confusion)
+                    if omega[S[nt], u_k, u_k] == 1: Y[nt, k] = u_k  # Project Observation (if in schema)
 
         # [B] - Train DS Model
         print(' - Training DS Model (per-Schema):')
@@ -143,7 +138,9 @@ if __name__ == '__main__':
                 pred_corr[DS, run, s] += np.equal(np.argmax(map_pred, axis=1), Z[valid_idcs]).sum()
                 pred_wght[DS, run, s] += np.log(map_pred[np.arange(len(map_pred)), Z[valid_idcs]]).sum()
 
-        # [C] - Train ISAR Model
+        # [C] - Train ISAR Model - but first, we have to identify NIS
+        for nt in range(sN*sT):
+            if np.isnan(Y[nt, A[nt, :]]).all(): Y[nt, A[nt, :]] = NIS
         print(' - Training ISAR Model (holistically):')
         for fold in range(sF):  # Iterate over folds
             print(' ---> Fold {}'.format(fold))
