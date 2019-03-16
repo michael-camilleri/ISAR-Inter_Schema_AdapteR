@@ -5,7 +5,7 @@ from scipy.stats import ttest_rel
 import numpy as np
 import argparse
 
-DEFAULTS = {'Results': ['../../data/Compare_DS.npz', '../../data/Compare_ISAR.npz'],
+DEFAULTS = {'Results': ['../../data/Compare_DS_D.npz', '../../data/Compare_ISAR_D.npz'],
             'Schemas': ['I', 'II', 'III', 'IV']}
 
 if __name__ == '__main__':

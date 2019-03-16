@@ -25,9 +25,11 @@ from Models import AnnotISAR
 DEFAULTS = {'Output':  '../../data/Parameters_ISAR',      # Result File
             'Random':  '0',                               # Random Seed offset
             'Numbers': ['0', '20'],                       # Range: start index, number of runs
-            'Lengths': ['60', '540'],                    # Number and length of segments
-            'Sizes':   ['13', '11'],                      # Dimensionality of the data: sZ/sK
-            'Steps':   ['0.001', '0.005', '0.01', '0.05', '0.1', '0.5', '1.0']  # Step Sizes
+            'Lengths': ['500', '100'],                    # Number and length of segments
+            'Sizes':   ['7', '6'],                        # Dimensionality of the data: sZ/sK
+            'Steps':   ['0.001', '0.005', '0.01', '0.05', '0.1', '0.5', '1.0'],  # Step Sizes
+            'Extreme': True,                              # One-V-Rest?
+            'Different': False                             # Different schemas within Sample?
             }
 nA = 3
 
@@ -63,8 +65,8 @@ if __name__ == '__main__':
                                                      'probability over Schemas and Annotators is uniform.',
                             action='store_true')
 
-    _arg_parse.set_defaults(different=False)
-    _arg_parse.set_defaults(extreme=False)
+    _arg_parse.set_defaults(different=DEFAULTS['Different'])
+    _arg_parse.set_defaults(extreme=DEFAULTS['Extreme'])
     # ---- Parse Arguments and transform as required ---- #
     args = _arg_parse.parse_args()
     args.random = int(args.random)
@@ -148,7 +150,10 @@ if __name__ == '__main__':
             for nt in range(n*sT, (n+1)*sT):    # Iterate over time-instances in this Segment
                 for k in A_nt:    # Iterate over Annotators chosen in this time-instant
                     U[nt, k] = np.random.choice(sU, p=psi[Z[nt], k, :])            # Compute Annotator Confusion
-                    Y[nt, k] = U[nt, k] if (omega[S[nt], int(U[nt, k]), int(U[nt, k])] == 1) else NIS  # Project
+                    if args.different:
+                        Y[nt, k] = U[nt, k] if (omega[S[nt, k], int(U[nt, k]), int(U[nt, k])] == 1) else NIS  # Project
+                    else:
+                        Y[nt, k] = U[nt, k] if (omega[S[nt], int(U[nt, k]), int(U[nt, k])] == 1) else NIS  # Project
         # And Shuffle all to avoid same sizes when
         permutation = np.random.permutation(sN*sT)
         Z = Z[permutation]
@@ -168,10 +173,10 @@ if __name__ == '__main__':
             pi_full[run, i, idcs] = npext.sum_to_one(cnts)
             # Train Psi:
             for z in range(sZ):
-                U_z = U[Z == z]      # Extract only where Z is equal to z
+                u_z = u_i[z_i == z, :]      # Extract only where Z is equal to z
                 for k in range(sK):
-                    U_kz = U_z[:, k]
-                    idcs, cnts = np.unique(U_kz[~np.isnan(U_kz)], return_counts=True)
+                    u_kz = u_z[:, k]
+                    idcs, cnts = np.unique(u_kz[~np.isnan(u_kz)], return_counts=True)
                     psi_full[run, i, z, k, idcs.astype(int)] = npext.sum_to_one(cnts)
 
         # [C] - Learn using ISAR
