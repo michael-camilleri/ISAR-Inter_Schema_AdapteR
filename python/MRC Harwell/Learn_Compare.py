@@ -87,8 +87,12 @@ if __name__ == '__main__':
     # ==== Simulate (and Learn) Model(s) ==== #
     # ---- Prepare Placeholders ---- #
     # Note that we use the same array for both: DS appears in the first, and ISAR in the second position
-    pred_corr = np.zeros([2, run_length, sS], dtype=float)      # Array for Absolute Accuracy
-    pred_wght = np.zeros([2, run_length, sS], dtype=float)      # Array for Predictive Log Probability
+    pred_corr_DS_S = np.zeros([run_length, sS], dtype=float)      # Array for Absolute Accuracy
+    pred_corr_DS_A = np.zeros([run_length, sS], dtype=float)
+    pred_corr_ISAR = np.zeros([run_length, sS], dtype=float)
+    pred_wght_DS_S = np.zeros([run_length, sS], dtype=float)      # Array for Predictive Log Probability
+    pred_wght_DS_A = np.zeros([run_length, sS], dtype=float)
+    pred_wght_ISAR = np.zeros([run_length, sS], dtype=float)
     run_sizes = np.zeros([run_length, sS], dtype=float)         # Number of Samples per Schema per Run
 
     # --- Iterate over Runs ---- #
@@ -141,6 +145,9 @@ if __name__ == '__main__':
                 map_pred = ds_model.estimate_map(results['Pi'], results['Psi'], _Y_Hot_valid, label_set, max_size=sZ)
                 pred_corr[DS, run, s] += np.equal(np.argmax(map_pred, axis=1), Z[valid_idcs]).sum()
                 pred_wght[DS, run, s] += np.log(map_pred[np.arange(len(map_pred)), Z[valid_idcs]]).sum()
+
+        # [C] - Train DS Model Holistically
+
 
         # [C] - Train ISAR Model - but first, we have to identify NIS (i.e. when the responsible annotators do not
         #       provide a label.
