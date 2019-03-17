@@ -20,11 +20,11 @@ from Models import AnnotDS, AnnotISAR
 
 # Default Parameters
 DEFAULTS = \
-    {'Output': ['none', 'none', '../../data/Compare_ISAR'],  # Result files '../../data/Compare_DSS', '../../data/Compare_DSA',
+    {'Output': ['none', '../../data/Compare_DSA', 'none'],              # Result files
      'Random': '0',                                                     # Random Seed offset
-     'Numbers': ['0', '10'],                                            # Range: start index, number of runs
-     'Lengths': ['60', '54'],                                         # Number and length of segments
-     'Folds': '5'}                                                     # Number of Folds to use (folding is by Segment)
+     'Numbers': ['0', '20'],                                            # Range: start index, number of runs
+     'Lengths': ['60', '5400'],                                         # Number and length of segments
+     'Folds': '10'}                                                     # Number of Folds to use (folding is by Segment)
 
 # Some Constants
 PDF_ANNOT = npext.sum_to_one([49, 31, 11, 4, 10, 25, 9, 7, 6, 3, 3])    # Probability over Annotators
@@ -208,15 +208,16 @@ if __name__ == '__main__':
                 isar_model = AnnotISAR(omega, -1, 100, sink=sys.stdout)
                 results = isar_model.fit_model(Y[train_idcs], S[train_idcs], priors, starts)
                 # Validate Model
-                m_omega = AnnotISAR.omega_msg(omega, Y[valid_idcs], S[valid_idcs])
+                Z_valid = Z[valid_idcs]
+                S_valid = S[valid_idcs]
+                m_omega = AnnotISAR.omega_msg(omega, Y[valid_idcs], S_valid)
                 map_pred = isar_model.estimate_map(results.Pi, results.Psi, m_omega, None)
                 predictions = np.argmax(map_pred, axis=1)
-                pred_likels = map_pred[np.arange(len(map_pred)), Z[valid_idcs]]
+                pred_likels = map_pred[np.arange(len(map_pred)), Z_valid]
                 for s in range(sS):
-                    schema_idcs = np.equal(S, s)
-                    _s_valid = np.logical_and(valid_idcs, schema_idcs)
-                    pred_corr_ISAR[run, s] += np.equal(predictions[schema_idcs[valid_idcs]], Z[_s_valid]).sum()
-                    pred_wght_ISAR[run, s] += np.log(pred_likels[schema_idcs[valid_idcs]]).sum()
+                    schema_idcs = np.equal(S_valid, s)
+                    pred_corr_ISAR[run, s] += np.equal(predictions[schema_idcs], Z_valid[schema_idcs]).sum()
+                    pred_wght_ISAR[run, s] += np.log(pred_likels[schema_idcs]).sum()
 
     # ===== Finally store the results to File: ===== #
     print('Storing Results to file ... ')
