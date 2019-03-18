@@ -20,10 +20,10 @@ from Models import MultISAR
 # Default Parameters
 DEFAULTS = \
     {'Source': '../../data/20NG_BOW.npz',   # Source of the Data
-     'Output': '../../data/Results_20',    # Result file
+     'Output': '../../data/Results_02',     # Result file
      'Random': '0',          # Random Seed offset
      'Numbers':  ['0', '30'],  # Range: start index, number of runs
-     'FullSpec': '0.2',     # Proportion of Fully-Specified Labels
+     'FullSpec': '0.02',     # Proportion of Fully-Specified Labels
      'Alpha': '0.005',       # Laplace Smoothing Parameter for counts
      'Steps': ['0.01', '0.02', '0.04', '0.06', '0.08', '0.1', '0.15', '0.2', '0.3', '0.4', '0.5', '0.6', '0.8', '1.0']}
 
@@ -40,7 +40,7 @@ if __name__ == '__main__':
                                                    'Defaults to {}'.format(DEFAULTS['Random']),
                             default=DEFAULTS['Random'])
     _arg_parse.add_argument('-n', '--numbers', help='Range of Runs to simulate: tuple containing the start index and '
-                                                    'number of runs. Defaults to {}/{}'.format(*DEFAULTS['Numbers']),
+                                                    'number of runs. Defaults to [{} {}]'.format(*DEFAULTS['Numbers']),
                             nargs=2, default=DEFAULTS['Numbers'])
     _arg_parse.add_argument('-f', '--fullspec', help='Proportion of the data to have fully-specified labels. Default '
                                                      'is {}'.format(DEFAULTS['FullSpec']), default=DEFAULTS['FullSpec'])

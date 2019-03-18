@@ -18,7 +18,7 @@ if __name__=='__main__':
     _arg_parse.add_argument('-r', '--results', help='List of Result files (separated by spaces). Defaults are: {}'.
                             format(DEFAULTS['Results']), default=DEFAULTS['Results'], nargs='*')
     _arg_parse.add_argument('-n', '--names', help='Names to accompany Result files: must be same number of elements as '
-                                                  'the [results] list. Defaults to: {}'.format(DEFAULTS['Names']),
+                                                  'the [results] list. Defaults to: {}'.format(DEFAULTS['Names']), # 
                             default=DEFAULTS['Names'], nargs='*')
     args = _arg_parse.parse_args()
     assert len(args.results) == len(args.names), 'Names must be of same length as Results'
