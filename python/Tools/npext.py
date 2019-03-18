@@ -1,7 +1,9 @@
 """
 This module contains some extensions of numpy/pandas functionality (hence the name 'NumPy EXTensions').
 """
+from scipy.optimize import linear_sum_assignment as hungarian
 from scipy.special import gamma
+from scipy.stats import entropy
 import numpy as np
 
 
@@ -180,3 +182,46 @@ def maximise_trace(x):
     """
     _rows, _cols = hungarian(np.full(len(x), np.max(x)) - x)
     return _cols, x[_rows, _cols].sum()
+
+
+def conditional_entropy(emission, prior=None, base=None):
+    """
+    Compute the Conditional Entropy of a Joint Distribution over latent and conditioned variables
+
+    :param emission:    The L by V conditional probabilities (Latent along the row-indices)
+    :param prior:       The Distribution over L (if None, use vector of ones)
+    :return:
+    """
+    if prior is None:
+        prior = np.ones(len(emission))/len(emission)
+
+    return np.dot(prior, entropy(emission.T, base=base))
+
+
+def mutual_information(prior, emission, base=None):
+    """
+    Compute the Mutual information between an input (Z) and set of output (X) variables, under the assumption that when
+      there is more than 1 X variable, they are conditionally independent of each other given Z (i.e. the Naive Bayes
+      assumption). Be careful however, that as the number of X variables increases, the dimensionality of the problem
+      explodes!
+
+    :param prior:       Prior Distribution over Z
+    :param emission:    Conditional Distribution over X given Z. This can be either:
+                            a) 2D Numpy array, with Z along the rows.
+                            b) List of 2D Numpy arrays, each constituting a 2D Numpy array (Z along rows) showing the
+                               emission of a variable
+    :return:            Mutual Information
+    """
+    # First Collapse all emissions into 1 by computing outer product along X-axis
+    if type(emission) in (list, tuple):
+        pXZ = [1 for _ in prior]
+        for k in range(len(prior)):
+            for variable in emission:
+                pXZ[k] = np.outer(pXZ[k], variable[k,:]).ravel()
+        emission = np.asarray(pXZ)
+
+    # Compute Marginal X:
+    pX = np.matmul(prior, emission)
+
+    # Now Compute Entropies and return
+    return entropy(pX, base=base) - conditional_entropy(emission, prior, base)

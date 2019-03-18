@@ -9,9 +9,6 @@ This stems from our modelling behaviour, in that if the annotator does not label
 not in-schema (i.e. we do not model missing-at-random behaviour.
 """
 
-
-from pandas.api.types import CategoricalDtype as CDType
-import pandas as pd
 import numpy as np
 import argparse
 import sys
@@ -22,14 +19,14 @@ from Tools import npext
 from Models import AnnotISAR
 
 # Default Parameters
-DEFAULTS = {'Output':  '../../data/Parameters_ISAR',      # Result File
+DEFAULTS = {'Output':  '../../data/Parameters_ISAR_003',  # Result File
             'Random':  '0',                               # Random Seed offset
             'Numbers': ['0', '20'],                       # Range: start index, number of runs
-            'Lengths': ['500', '100'],                    # Number and length of segments
-            'Sizes':   ['7', '6'],                        # Dimensionality of the data: sZ/sK
+            'Lengths': ['60', '5400'],                    # Number and length of segments
+            'Sizes':   ['13', '11'],                      # Dimensionality of the data: sZ/sK
             'Steps':   ['0.001', '0.005', '0.01', '0.05', '0.1', '0.5', '1.0'],  # Step Sizes
-            'Extreme': True,                              # One-V-Rest?
-            'Different': False                             # Different schemas within Sample?
+            'Extreme': False,                             # One-V-Rest?
+            'Different': False                            # Different schemas within Sample?
             }
 nA = 3
 
@@ -149,7 +146,7 @@ if __name__ == '__main__':
             A_nt = np.random.choice(sK, size=nA, replace=False, p=PDF_ANNOT)  # Annotators
             for nt in range(n*sT, (n+1)*sT):    # Iterate over time-instances in this Segment
                 for k in A_nt:    # Iterate over Annotators chosen in this time-instant
-                    U[nt, k] = np.random.choice(sU, p=psi[Z[nt], k, :])            # Compute Annotator Confusion
+                    U[nt, k] = np.random.choice(sU, p=Psi[Z[nt], k, :])            # Compute Annotator Confusion
                     if args.different:
                         Y[nt, k] = U[nt, k] if (omega[S[nt, k], int(U[nt, k]), int(U[nt, k])] == 1) else NIS  # Project
                     else:
@@ -190,7 +187,7 @@ if __name__ == '__main__':
                        np.stack([npext.sum_to_one(np.eye(sZ, sZ) + np.full([sZ, sZ], fill_value=0.01), axis=1)
                                  for _ in range(sK)]).swapaxes(0, 1))]
             # Train ISAR Model
-            isar_model = AnnotISAR(omega, -1, 100, sink=sys.stdout)
+            isar_model = AnnotISAR(omega, -1, 200, sink=sys.stdout)
             results = isar_model.fit_model(y_i, s_i, priors, starts)
             # Store results
             pi_isar[run, i, :] = results.Pi

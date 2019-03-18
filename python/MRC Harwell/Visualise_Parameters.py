@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import argparse
 
-DEFAULTS = {'Results': '../../data/Parameters_ISAR_C.npz', 'Independent': False}
+DEFAULTS = {'Results': '../../data/Parameters_ISAR_003.npz', 'Independent': True}
 
 
 if __name__ == '__main__':

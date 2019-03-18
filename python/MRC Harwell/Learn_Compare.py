@@ -20,17 +20,17 @@ from Models import AnnotDS, AnnotISAR
 
 # Default Parameters
 DEFAULTS = \
-    {'Output': ['none', '../../data/Compare_DSA', 'none'],              # Result files
-     'Random': '0',                                                     # Random Seed offset
-     'Numbers': ['0', '20'],                                            # Range: start index, number of runs
-     'Lengths': ['60', '5400'],                                         # Number and length of segments
-     'Folds': '10'}                                                     # Number of Folds to use (folding is by Segment)
+    {'Output': ['../../data/Compare_DSS', '../../data/Compare_DSA', '../../data/Compare_ISAR'],
+     'Random': '0',                                               # Random Seed offset
+     'Numbers': ['0', '20'],                                      # Range: start index, number of runs
+     'Lengths': ['60', '5400'],                                   # Number and length of segments
+     'Schemas': ['13', '15', '17', '10'],                         # Probability over Schemas,
+     'Folds': '10'}                                               # Number of Folds to use (folding is by Segment)
 
 # Some Constants
 PDF_ANNOT = npext.sum_to_one([49, 31, 11, 4, 10, 25, 9, 7, 6, 3, 3])    # Probability over Annotators
 sK = len(PDF_ANNOT)
-PDF_SCHEMA = npext.sum_to_one([13, 15, 17, 10])                         # Probability over Schemas
-sS = len(PDF_SCHEMA)
+sS = 4
 # CD-Type per schema
 CDTYPES = (CDType(categories=[0, 1, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]),           # I
            CDType(categories=[0, 1, 5, 6, 7, 10, 12]),                           # II
@@ -59,6 +59,8 @@ if __name__ == '__main__':
                             .format(DEFAULTS['Lengths']), default=DEFAULTS['Lengths'], nargs=2)
     _arg_parse.add_argument('-f', '--folds', help='Number of splits (folds) to operate on per run. Default {}'
                             .format(DEFAULTS['Folds']), default=DEFAULTS['Folds'])
+    _arg_parse.add_argument('-s', '--schemas', help='Schema Probabilities. Default is: {}'.format(DEFAULTS['Schemas']),
+                            default=DEFAULTS['Schemas'], nargs=sS)
     _arg_parse.add_argument('-a', '--all', help='If Set, then store all the data (i.e. including the simulation): note '
                                                 'that this will generate large files. Default is off.', dest='save_all',
                             action='store_true')
@@ -68,6 +70,7 @@ if __name__ == '__main__':
     args.random = int(args.random)
     run_offset = int(args.numbers[0])
     run_length = int(args.numbers[1])
+    pdf_schema = npext.sum_to_one([float(f) for f in args.schemas])  # Probability over Schemas
     sN, sT = [int(l) for l in args.lengths]
     sF = int(args.folds)
     if args.save_all:
@@ -115,7 +118,7 @@ if __name__ == '__main__':
         # [A] - Generate Data
         print(' - Generating Data:')
         Z = np.random.choice(sZ, size=sN*sT, p=pi)                                          # Latent State
-        S = np.repeat(np.random.choice(sS, size=sN, p=PDF_SCHEMA), sT)                      # Schema
+        S = np.repeat(np.random.choice(sS, size=sN, p=pdf_schema), sT)                      # Schema
         F = np.repeat([next(iterator) for _ in range(sN)], sT)                              # Folds: sequentially
         # With regards to the observations, have to do on a sample-by-sample basis.
         Y = np.full([sN * sT, sK], fill_value=np.NaN)   # Observations Matrix

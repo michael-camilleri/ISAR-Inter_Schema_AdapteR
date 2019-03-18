@@ -147,6 +147,8 @@ class AnnotISAR(WorkerHandler):
             """
             if len(likelihoods) < 2:
                 return False
+            elif likelihoods[-1] < likelihoods[-2]:
+                warnings.warn('Drop in Log-Likelihood Observed! Results are probably wrong.')
             else:
                 return abs((likelihoods[-1] - likelihoods[-2])/likelihoods[-2]) < tolerance
 
