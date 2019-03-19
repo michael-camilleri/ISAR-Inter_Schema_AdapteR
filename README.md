@@ -99,14 +99,14 @@ the entire data-set and an ISAR model trained also holistically. Just pass `none
 component. The below is the configuration to run `Learn_Compare` with: this is also the default and you can just call
 the script alone:
    ```bash
-   python Learn_Compare.py -o '../../data/Compare_DSS' '../../data/Compare_DSA' '../../data/Compare_ISAR' -r 0 -n 0 20 -l 60 5400 -f 10 -s 13 15 17 10
+   python Learn_Compare.py -o ../../data/Compare_DSS ../../data/Compare_DSA ../../data/Compare_ISAR -r 0 -n 0 20 -l 60 5400 -f 10 -s 13 15 17 10
    ```
    Note that this will take about 10 Hours since it has not **yet** been optimised to run multiple runs
 in parallel.
 
 2. Visualise the Results in Tabular Format: again, the default configuration is enough, but is given here for posterity:
    ```bash
-   python Visualise_Compare.py -r '../../data/Compare_DSS.npz' '../../data/Compare_DSA.npz' '../../data/Compare_ISAR.npz' -s I II III IV
+   python Visualise_Compare.py -r ../../data/Compare_DSS.npz ../../data/Compare_DSA.npz ../../data/Compare_ISAR.npz -s I II III IV
    ```
    
 #### Efficiency of the ISAR model over DS
@@ -114,12 +114,12 @@ While not shown in the paper, we also analysed whether naively training the DS m
 
 1. Train DS/ISAR Models on a reduced and lopsided data-set:
    ```bash
-   python Learn_Compare.py -o '../../data/Compare_DSS' '../../data/Compare_DSA' '../../data/Compare_ISAR' -r 0 -n 0 20 -l 100 50 -f 10 -s 1 10 1 10
+   python Learn_Compare.py -o ../../data/Compare_DSS ../../data/Compare_DSA ../../data/Compare_ISAR -r 0 -n 0 20 -l 100 50 -f 10 -s 1 10 1 10
    ```
   
 1. Visualise again the data as before:
    ```bash
-   python Visualise_Compare.py -r '../../data/Compare_DSS.npz' '../../data/Compare_DSA.npz' '../../data/Compare_ISAR.npz' -s I II III IV
+   python Visualise_Compare.py -r ../../data/Compare_DSS.npz ../../data/Compare_DSA.npz ../../data/Compare_ISAR.npz -s I II III IV
    ```
    
 Note how now, there is a very significant (doubling) of performance in terms of accuracy between the DS trained holistically and the ISAR Model.
@@ -135,8 +135,42 @@ This is again a two-stage process. To replicate Fig. 6 (a):
 
 1. Train the Model using the single-schema per-sample setting:
    ```bash
-   python Learn_Parameters.py -o '../../data/Parameters_ISAR_003' -r 0 -n 0 20 -l 500 100 -s 7 6 -i 0.001 0.005 0.01 0.05 0.1 0.5 1.0 -e
+   python Learn_Parameters.py -o ../../data/Parameters_ISAR -r 0 -n 0 20 -l 500 100 -s 7 6 -i 0.001 0.005 0.01 0.05 0.1 0.5 1.0 -e
    ```
+2. Visualise the results:
+   ```bash
+   python Visualise_Parameters.py -r ../../data/Parameters_ISAR.npz
+   ```
+   
+For Fig. 6 (b) follow the same procedure but we allow for a different schema per sample by passing the `-f` flag:
+   ```bash
+   python Learn_Parameters.py -o ../../data/Parameters_ISAR -r 0 -n 0 20 -l 500 100 -s 7 6 -i 0.001 0.005 0.01 0.05 0.1 0.5 1.0 -e -f
+   ```
+Following this, you can visualise results as before.
+
+#### MRC Harwell Schemas (Section 5.3.2)
+
+To replicate Fig. 8, we reuse the same scripts as above but with a different configuration (this is also the default configuration):
+
+1. Train the Model under realistic conditions:
+   ```bash
+   python Learn_Parameters.py -o ../../data/Parameters_ISAR -r 0 -n 0 20 -l 60 5400 -s 13 11 -i 0.001 0.005 0.01 0.05 0.1 0.5 1.0 
+   ```
+   
+2. Visualise the results: in this case, it is also helpful to visualise per-annotator Psi emissions (Fig. 8 (b)) using the `-i` flag
+   ```bash
+   python Visualise_Parameters.py -r ../../data/Parameters_ISAR.npz -i
+   ```
+   
+### Analysis of Mutual Information (Section 5.4)
+
+This is a one-part script which will generate all the values in Table 5:
+
+```bash
+python AnalseMutualInformation.py
+```
+
+
 
 ## Troubleshooting
 
@@ -147,6 +181,10 @@ This is again a two-stage process. To replicate Fig. 6 (a):
 * PROBLEM: Executing '20 Newsgroups\Visualise.py' gives me a bunch of errors ending with `ValueError: unsupported format character ''' (0x27) at index 109`
 
   FIX: This appears to be a limitation with running the script on Windows, and the way it handles special characters (in this case the percentage sign). To avoid this, make sure you specify the names of the lines using the `-n` switch.
+  
+* PROBLEM: The script runs successfully, but fails when storing results with `FileNotFoundError: [Errno 2] No such file or directory: "XXXXXXX"`
+
+  FIX: On Windows, you must replace forward slashes in the path with back-slashes!
   
 
 
