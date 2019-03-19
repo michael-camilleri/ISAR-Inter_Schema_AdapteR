@@ -53,7 +53,7 @@ if __name__ == '__main__':
                                                    'Defaults to {}'.format(DEFAULTS['Random']),
                             default=DEFAULTS['Random'])
     _arg_parse.add_argument('-n', '--numbers', help='Range of Runs to simulate: tuple containing the start index and '
-                                                    'number of runs. Defaults to {}/{}'.format(*DEFAULTS['Numbers']),
+                                                    'number of runs. Defaults to [{} {}]'.format(*DEFAULTS['Numbers']),
                             nargs=2, default=DEFAULTS['Numbers'])
     _arg_parse.add_argument('-l', '--lengths', help='Number and length of each segment. Default {}'
                             .format(DEFAULTS['Lengths']), default=DEFAULTS['Lengths'], nargs=2)
