@@ -20,12 +20,12 @@ from Models import AnnotDS, AnnotISAR
 
 # Default Parameters
 DEFAULTS = \
-    {'Output': ['../../data/Compare_DSS', '../../data/Compare_DSA', '../../data/Compare_ISAR'],
-     'Random': '0',                                               # Random Seed offset
-     'Numbers': ['0', '20'],                                      # Range: start index, number of runs
-     'Lengths': ['60', '5400'],                                   # Number and length of segments
-     'Schemas': ['13', '15', '17', '10'],                         # Probability over Schemas,
-     'Folds': '10'}                                               # Number of Folds to use (folding is by Segment)
+    {'Output': ['../../data/Compare_DS', '../../data/Compare_ISAR'],  # File-Names
+     'Random': '0',                                                   # Random Seed offset
+     'Numbers': ['0', '20'],                                          # Range: start index, number of runs
+     'Lengths': ['60', '5400'],                                       # Number and length of segments
+     'Schemas': ['13', '15', '17', '10'],                             # Probability over Schemas,  #
+     'Folds': '10'}                                                   # Number of Folds to use (folding is by Segment)
 
 # Some Constants
 PDF_ANNOT = npext.sum_to_one([49, 31, 11, 4, 10, 25, 9, 7, 6, 3, 3])    # Probability over Annotators
@@ -39,16 +39,16 @@ CDTYPES = (CDType(categories=[0, 1, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]),          
            CDType(categories=[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]))        # Full Label-Set (for DS_ALL)
 
 nA = 3              # Number of Annotators in any one sample
-DSS, DSA, ISAR = (0, 1, 2)   # Position (index) into arrays
+DS, ISAR = (0, 1)   # Position (index) into arrays
 
 if __name__ == '__main__':
 
     # ==== Parse Arguments ==== #
     _arg_parse = argparse.ArgumentParser(description='Simulate and Train Annotator Models (based on DS and ISAR)')
-    _arg_parse.add_argument('-o', '--output', help='Output Result files, one each for the results from the DS trained '
-                                                   'per schema, DS trained holistically and ISAR models. Put "None" '
-                                                   'for any that you do not want to simulate. Defaults to {}'
-                            .format(DEFAULTS['Output']), default=DEFAULTS['Output'], nargs=3)
+    _arg_parse.add_argument('-o', '--output', help='Output Result files, one each for the results from the DS (trained '
+                                                   'holistically) and ISAR models. Put "None" for any that you do not '
+                                                   'want to simulate. Defaults to {}'
+                            .format(DEFAULTS['Output']), default=DEFAULTS['Output'], nargs=2)
     _arg_parse.add_argument('-r', '--random', help='Seed (offset) for all Random States: ensures repeatibility. '
                                                    'Defaults to {}'.format(DEFAULTS['Random']),
                             default=DEFAULTS['Random'])
@@ -91,16 +91,11 @@ if __name__ == '__main__':
     # ==== Simulate (and Learn) Model(s) ==== #
     # ---- Prepare Placeholders ---- #
     # Note that we use the same array for both: DS appears in the first, and ISAR in the second position
-    if args.output[DSS].lower() != 'none':
-        pred_corr_DS_S = np.zeros([run_length, sS], dtype=float)      # Array for Absolute Accuracy
-        pred_wght_DS_S = np.zeros([run_length, sS], dtype=float)      # Array for Predictive Log Probability
+    if args.output[DS].lower() != 'none':
+        pred_corr_DS = np.zeros([run_length, sS], dtype=float)      # Array for Absolute Accuracy
+        pred_wght_DS = np.zeros([run_length, sS], dtype=float)      # Array for Predictive Log Probability
     else:
-        pred_corr_DS_S = None; pred_wght_DS_S = None
-    if args.output[DSA].lower() != 'none':
-        pred_corr_DS_A = np.zeros([run_length, sS], dtype=float)
-        pred_wght_DS_A = np.zeros([run_length, sS], dtype=float)
-    else:
-        pred_corr_DS_A = None; pred_wght_DS_A = None
+        pred_corr_DS = None; pred_wght_DS = None
     if args.output[ISAR].lower() != 'none':
         pred_corr_ISAR = np.zeros([run_length, sS], dtype=float)
         pred_wght_ISAR = np.zeros([run_length, sS], dtype=float)
@@ -133,37 +128,8 @@ if __name__ == '__main__':
         for s in range(sS):
             run_sizes[run, s] = np.equal(S, s).sum()
 
-        # [B] - Train DS Model
-        if args.output[DSS].lower() != 'none':
-            print(' - Training DS Model (per-Schema):')
-            for s in range(sS):     # Have to train independently per schema
-                print(' ---> Schema {}'.format(s))
-                schema_idcs = np.equal(S, s)
-                for fold in range(sF):  # Iterate over folds
-                    print('   ------> Fold {}'.format(fold))
-                    # Split Training/Validation Sets
-                    train_idcs = np.logical_and(np.not_equal(F, fold), schema_idcs)
-                    valid_idcs = np.logical_and(np.equal(F, fold), schema_idcs)
-                    # Get Label-Set associated with this Schema
-                    label_set = CDTYPES[s].categories.values
-                    sL = len(label_set)
-                    priors = [np.ones(sL), np.ones([sL, sK * sL])]  # Prior Smoothers of 1s
-                    starts = [(npext.sum_to_one(np.ones(sL)),       # Starting Probabilities
-                               np.tile(npext.sum_to_one(np.eye(sL, sL) + np.full([sL, sL], fill_value=0.01), axis=1), sK))]
-                    # For Legacy Reasons, we need 1-Hot Encoded Data
-                    _Y_Hot_train = pd.get_dummies(pd.DataFrame(Y[train_idcs]).astype(CDTYPES[s])).values
-                    _Y_Hot_valid = pd.get_dummies(pd.DataFrame(Y[valid_idcs]).astype(CDTYPES[s])).values
-                    sM = len(_Y_Hot_train)
-                    # Train Model
-                    ds_model = AnnotDS([sM, sL, sK, sL], -1, 100, sink=sys.stdout)
-                    results = ds_model.fit_model(_Y_Hot_train, priors, starts)
-                    # Validate Model
-                    map_pred = ds_model.estimate_map(results['Pi'], results['Psi'], _Y_Hot_valid, label_set, max_size=sZ)
-                    pred_corr_DS_S[run, s] += np.equal(np.argmax(map_pred, axis=1), Z[valid_idcs]).sum()
-                    pred_wght_DS_S[run, s] += np.log(map_pred[np.arange(len(map_pred)), Z[valid_idcs]]).sum()
-
-        # [C] - Train DS Model Holistically
-        if args.output[DSA].lower() != 'none':
+        # [B] - Train DS Model Holistically
+        if args.output[DS].lower() != 'none':
             print(' - Training DS Model (Holistically):')
             for fold in range(sF):  # Iterate over folds
                 print(' ---> Fold {}'.format(fold))
@@ -188,10 +154,10 @@ if __name__ == '__main__':
                 pred_likels = map_pred[np.arange(len(map_pred)), Z_valid]
                 for s in range(sS):
                     schema_idcs = np.equal(S_valid, s)
-                    pred_corr_DS_A[run, s] += np.equal(predictions[schema_idcs], Z_valid[schema_idcs]).sum()
-                    pred_wght_DS_A[run, s] += np.log(pred_likels[schema_idcs]).sum()
+                    pred_corr_DS[run, s] += np.equal(predictions[schema_idcs], Z_valid[schema_idcs]).sum()
+                    pred_wght_DS[run, s] += np.log(pred_likels[schema_idcs]).sum()
 
-        # [D] - Train ISAR Model - but first, we have to identify NIS (i.e. when the responsible annotators do not
+        # [C] - Train ISAR Model - but first, we have to identify NIS (i.e. when the responsible annotators do not
         #       provide a label.
         if args.output[ISAR].lower() != 'none':
             print(' - Training ISAR Model (holistically):')
@@ -224,9 +190,7 @@ if __name__ == '__main__':
 
     # ===== Finally store the results to File: ===== #
     print('Storing Results to file ... ')
-    if args.output[DSS].lower() != 'none':
-        np.savez_compressed(args.output[DSS], accuracy=pred_corr_DS_S, log_loss=-pred_wght_DS_S, sizes=run_sizes)
-    if args.output[DSA].lower() != 'none':
-        np.savez_compressed(args.output[DSA], accuracy=pred_corr_DS_A, log_loss=-pred_wght_DS_A, sizes=run_sizes)
+    if args.output[DS].lower() != 'none':
+        np.savez_compressed(args.output[DS], accuracy=pred_corr_DS, log_loss=-pred_wght_DS, sizes=run_sizes)
     if args.output[ISAR].lower() != 'none':
         np.savez_compressed(args.output[ISAR], accuracy=pred_corr_ISAR, log_loss=-pred_wght_ISAR, sizes=run_sizes)
