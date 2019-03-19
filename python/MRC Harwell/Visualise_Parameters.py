@@ -52,7 +52,7 @@ if __name__ == '__main__':
 
     # ==== Now Plot ==== #
     # --- Plot All Together --- #
-    plt.figure()
+    plt.figure(figsize=[10, 10])
     # [A] - Plot
     plt.errorbar(Data_sizes.mean(axis=0), np.mean(rad_isar_pi, axis=0), yerr=np.std(rad_isar_pi, axis=0),
                  label='$\Pi$ (ISAR)', linewidth=2.0, color='b', linestyle='-')
@@ -64,14 +64,15 @@ if __name__ == '__main__':
                  label='$\Psi$ (Full)', linewidth=2.0, color='orange', linestyle='--')
     # [B] - Improve Plot
     plt.legend(fontsize=20)
-    plt.xlabel('Number of samples used for training', fontsize=20)
-    plt.ylabel('RAD', fontsize=20)
+    plt.xlabel('Data-Set Size', fontsize=20)
+    plt.ylabel('% RAD', fontsize=20)
     plt.tick_params(axis='both', which='major', labelsize=20)
     plt.grid(True, which='major', axis='both')
     plt.xscale('log')
+    plt.tight_layout(pad=0.2)
     # --- Will Plot Individually If requested --- #
     if args.independent:
-        plt.figure()
+        plt.figure(figsize=[10, 10])
         # [A] - Plot per Annotator
         for k in range(sK):
             plt.errorbar(Data_sizes.mean(axis=0), np.mean(rad_isar_psi_k[:, :, k], axis=0),
@@ -83,4 +84,5 @@ if __name__ == '__main__':
         plt.tick_params(axis='both', which='major', labelsize=20)
         plt.grid(True, which='major', axis='both')
         plt.xscale('log')
+        plt.tight_layout(pad=0.2)
     plt.show()

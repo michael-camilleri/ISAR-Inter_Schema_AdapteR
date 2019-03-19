@@ -94,19 +94,18 @@ data. That being said, care was taken to model the data generation process as cl
 #### Latent State Inference (Section 5.2.2)
 Table 4 can be replicated in a two-stage process:
 
-1. Train the DS/ISAR Models. This will generate three files, one each for DS model trained per-schema, a DS model trained (naively) on
-the entire data-set and an ISAR model trained also holistically. Just pass `none` if you wish to suppress any simulation
+1. Train the DS/ISAR Models. This will generate two files, one each for DS and ISAR model trained also holistically. Just pass `none` if you wish to suppress any simulation
 component. The below is the configuration to run `Learn_Compare` with: this is also the default and you can just call
 the script alone:
    ```bash
-   python Learn_Compare.py -o ../../data/Compare_DSS ../../data/Compare_DSA ../../data/Compare_ISAR -r 0 -n 0 20 -l 60 5400 -f 10 -s 13 15 17 10
+   python Learn_Compare.py -o ../../data/Compare_DS ../../data/Compare_ISAR -r 0 -n 0 20 -l 60 5400 -f 10 -s 13 15 17 10
    ```
    Note that this will take about 10 Hours since it has not **yet** been optimised to run multiple runs
 in parallel.
 
 2. Visualise the Results in Tabular Format: again, the default configuration is enough, but is given here for posterity:
    ```bash
-   python Visualise_Compare.py -r ../../data/Compare_DSS.npz ../../data/Compare_DSA.npz ../../data/Compare_ISAR.npz -s I II III IV
+   python Visualise_Compare.py -r ../../data/Compare_DS.npz ../../data/Compare_ISAR.npz -s I II III IV
    ```
    
 #### Efficiency of the ISAR model over DS
