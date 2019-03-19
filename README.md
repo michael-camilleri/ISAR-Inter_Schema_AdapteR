@@ -18,6 +18,7 @@ At the top level, there are two `requirements` files, for easy installation of t
  * **Models**: Contains the ISAR implementations for the Multinomial Class-Conditional and Inter-Annotator Variability models.
  * **20 Newsgroups**: Contains scripts for replicating the results of the simulations on the 20 Newsgroups Dataset (i.e. Section 5.1 in the Paper).
  * **MRC Harwell**: Contains scripts for replicating the results of the simulations and analysis on the MRC Harwell Data (i.e. Sections 5.2.2, 5.3 and 5.4).
+
 There is also a `data` directory which at the outset contains the parameters for the MRC-Harwell-trained models which form the basis of our simulations. This is also the default directory for storing results from simulation runs (but can be configured, see below).
  
 In general, the replication scripts are split into two stages: one for simulating and training the models, and the other for visualising results.
@@ -76,13 +77,16 @@ python Load.py -o ../../data/20NG_BOW -r 1010 -f 5000 -t 0.2
 ```
 python Learn.py -s ../../data/20NG_BOW.npz -o ../../data/<NAME> -r 0 -n 0 30 -f <FRACTION> -a 0.005
 ```
-where `<FRACTION` should be one from [0.02, 0.05, 0.1, 0.2]. The default is for 0.02.
+where `<FRACTION>` should be one from [0.02, 0.05, 0.1, 0.2]. The default is for 0.02.
 
 3. Visualise the Results. This is called once, passing in as a list the (4) result files. Assuming each file was named Results_{} where {} is a standin for the percentage, this can be by achieved:
 ```
 python Visualise.py -r ../../data/Results_02.npz ../../data/Results_05.npz ../../data/Results_10.npz ../../data/Results_20.npz -n 2% 5% 10% 20%
 ```
 The second parameter allows customisation of the naming of the lines on the plot.
+
+### 
+
 
 ## Troubleshooting
 
