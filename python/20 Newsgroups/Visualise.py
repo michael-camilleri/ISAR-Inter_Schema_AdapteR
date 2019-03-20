@@ -25,6 +25,7 @@ if __name__=='__main__':
 
     # ==== Load Files and Visualise Plots ==== #
     # --- Iterate through Experiments --- #
+    plt.figure(figsize=[13.5, 7.5])
     for exp_name, exp_file in zip(args.names, args.results):
         with np.load(exp_file) as _data:
             _scores = _data['score']
@@ -38,4 +39,5 @@ if __name__=='__main__':
     plt.grid(True, which='major', axis='both')
     plt.axes().yaxis.set_minor_locator(MLoc(0.025))
     plt.grid(True, which='minor', axis='y', color='c', linestyle='--')
+    plt.tight_layout(pad=0.2)
     plt.show()
