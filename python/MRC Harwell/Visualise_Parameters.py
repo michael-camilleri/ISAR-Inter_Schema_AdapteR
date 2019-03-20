@@ -50,6 +50,10 @@ if __name__ == '__main__':
                 rad_isar_psi_k[run, inc, :] = (np.abs(Psi_true[run] - Psi_isar[run, inc]) * 100.0 /
                                                np.mean(Psi_true[run], axis=(0, 2), keepdims=True)).mean(axis=(0, 2))
 
+    # ==== Print final values for Posterity ==== #
+    print('Using Full: Pi={:.2f}% | Psi={:.2f}%'.format(np.mean(rad_full_pi[:, -1]), np.mean(rad_full_psi[:, -1])))
+    print('Using ISAR: Pi={:.2f}% | Psi={:.2f}%'.format(np.mean(rad_isar_pi[:, -1]), np.mean(rad_isar_psi[:, -1])))
+
     # ==== Now Plot ==== #
     # --- Plot All Together --- #
     plt.figure(figsize=[10, 10])
@@ -69,6 +73,7 @@ if __name__ == '__main__':
     plt.tick_params(axis='both', which='major', labelsize=20)
     plt.grid(True, which='major', axis='both')
     plt.xscale('log')
+    plt.ylim([0, 140])  # Set to 130 for ISAR_003 to get exact scale as in paper
     plt.tight_layout(pad=0.2)
     # --- Will Plot Individually If requested --- #
     if args.independent:
@@ -77,6 +82,7 @@ if __name__ == '__main__':
         for k in range(sK):
             plt.errorbar(Data_sizes.mean(axis=0), np.mean(rad_isar_psi_k[:, :, k], axis=0),
                          yerr=np.std(rad_isar_psi_k[:, :, k], axis=0), label='$\Psi$ (A {})'.format(k), linewidth=2.0)
+            print('Annotator {}: Psi={:.2f}%'.format(k, np.mean(rad_isar_psi_k[:, -1, k])))
         # [B] - Improve Plot
         plt.legend(fontsize=20)
         plt.xlabel('Number of samples used for training', fontsize=20)
@@ -84,5 +90,6 @@ if __name__ == '__main__':
         plt.tick_params(axis='both', which='major', labelsize=20)
         plt.grid(True, which='major', axis='both')
         plt.xscale('log')
+        plt.ylim([0, 130])
         plt.tight_layout(pad=0.2)
     plt.show()
