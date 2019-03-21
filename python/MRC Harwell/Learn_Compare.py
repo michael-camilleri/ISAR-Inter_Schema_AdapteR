@@ -23,8 +23,9 @@ DEFAULTS = \
     {'Output': ['../../data/Compare_DS', '../../data/Compare_ISAR'],  # File-Names
      'Random': '0',                                                   # Random Seed offset
      'Numbers': ['0', '20'],                                          # Range: start index, number of runs
-     'Lengths': ['60', '5400'],                                       # Number and length of segments
+     'Lengths': ['100', '50'],                                       # Number and length of segments
      'Schemas': ['13', '15', '17', '10'],                             # Probability over Schemas,  #
+     'Uniform': False,                                                 # Set Pi to Uniform
      'Folds': '10'}                                                   # Number of Folds to use (folding is by Segment)
 
 # Some Constants
@@ -61,10 +62,13 @@ if __name__ == '__main__':
                             .format(DEFAULTS['Folds']), default=DEFAULTS['Folds'])
     _arg_parse.add_argument('-s', '--schemas', help='Schema Probabilities. Default is: {}'.format(DEFAULTS['Schemas']),
                             default=DEFAULTS['Schemas'], nargs=sS)
+    _arg_parse.add_argument('-u', '--uniform', help='If set, then Pi is a uniform distribution (i.e. all states are '
+                                                    'equally likely.', action='store_true')
     _arg_parse.add_argument('-a', '--all', help='If Set, then store all the data (i.e. including the simulation): note '
                                                 'that this will generate large files. Default is off.', dest='save_all',
                             action='store_true')
     _arg_parse.set_defaults(save_all=False)
+    _arg_parse.set_defaults(uniform=DEFAULTS['Uniform'])
     # ---- Parse Arguments and transform as required ---- #
     args = _arg_parse.parse_args()
     args.random = int(args.random)
@@ -77,10 +81,11 @@ if __name__ == '__main__':
         print('Saving everything is not currently supported and will be ignored.')
 
     # ==== Load/Prepare the Data ==== #
+    np.random.seed(args.random)
     # ---- Load Baseline Models ---- #
     with np.load('../../data/model.mrc.npz') as _data:
         omega = _data['omega']
-        pi = _data['pi']
+        pi = _data['pi'] if not args.uniform else np.random.dirichlet(np.full_like(_data['pi'], 20))
         psi = _data['psi']
     # ---- Extract Sizes ---- #
     sZ, sK, sU = psi.shape       # Latent Model [Z, #Annotators, U]
