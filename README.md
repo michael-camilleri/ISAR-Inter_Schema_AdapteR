@@ -89,39 +89,35 @@ Replicating Fig. 5 is a three-stage process.
 ### Analysis on the Crowdsourced Characterisation Task (Section 5.2)
 
 Due to the ownership of the data, we can only show here the results for the inference of the latent state on simulated 
-data. That being said, care was taken to model the data generation process as close as possible. 
+data (i.e. Section 5.2.2). That being said, care was taken to model the data generation process as close as possible. 
 
-#### Latent State Inference (Section 5.2.2)
-Table 4 can be replicated in a two-stage process:
+Tables 4/6 can be replicated in a two-step process.
 
-1. Train the DS/ISAR Models. This will generate two files, one each for DS and ISAR model trained also holistically. Just pass `none` if you wish to suppress any simulation
-component. The below is the configuration to run `Learn_Compare` with: this is also the default and you can just call
-the script alone:
+1. Train the DS/ISAR Models on the entire dataset. This will generate two files, one each for DS and ISAR: just pass `none` to the -o parameter if you wish to suppress any simulation component. The below is the code to generate the results for the `Realistic` case (which is also the default): note that this will take about 10 Hours since it has not **yet** been optimised to run multiple runs
+in parallel.
    ```bash
    python Learn_Compare.py -o ../../data/Compare_DS ../../data/Compare_ISAR -r 0 -n 0 20 -l 60 5400 -f 10 -s 13 15 17 10
    ```
-   Note that this will take about 10 Hours since it has not **yet** been optimised to run multiple runs
-in parallel.
+   In all cases, the following parameters are common:
+    * `-r 0` (Random State)
+    * `-n 0 20` (Start index and number of independent runs)
+    * `-f 10` (Number of folds)
+ The remaining settings for each run are as follows (you may also wish to specify different output file names for each configuration as otherwise the results would be overwritten):
 
-2. Visualise the Results in Tabular Format: again, the default configuration is enough, but is given here for posterity:
+  |     Case    |   -l    |     -s      |  -p   |
+  | ----------- | ------- | ----------- | ----- |
+  | `Realistic` | 60 5400 | 13 15 17 10 | true  |
+  | `Reduced`   | 500 100 | 13 15 17 10 | true  |
+  | `Uniform`   | 500 100 | 13 15 17 10 | unif  |
+  | `Dirichlet` | 500 100 | 13 15 17 10 | 10    |
+  | `Biased`    | 500 100 | 1  10 1  10 | true  |
+  | `Bias&Unif` | 500 100 | 1  10 1  10 | unif  |  
+
+
+2. Visualise the Results in Tabular Format: again, the default configuration (up to specification of which result files to use) is enough, but is given here for posterity:
    ```bash
    python Visualise_Compare.py -r ../../data/Compare_DS.npz ../../data/Compare_ISAR.npz -s I II III IV
    ```
-   
-#### Efficiency of the ISAR model over DS
-While not shown in the paper, we also analysed whether naively training the DS model on the entire data-set is a good (simpler) alternative. While it seems to do ok on the dataset we have, we note that this is not always the case, especially when there is some bias in the schema-selection. To test this, we experiment with reduced data and biased schema distributions:
-
-1. Train DS/ISAR Models on a reduced and lopsided data-set:
-   ```bash
-   python Learn_Compare.py -o ../../data/Compare_DSS ../../data/Compare_DSA ../../data/Compare_ISAR -r 0 -n 0 20 -l 100 50 -f 10 -s 1 10 1 10
-   ```
-  
-1. Visualise again the data as before:
-   ```bash
-   python Visualise_Compare.py -r ../../data/Compare_DSS.npz ../../data/Compare_DSA.npz ../../data/Compare_ISAR.npz -s I II III IV
-   ```
-   
-Note how now, there is a very significant (doubling) of performance in terms of accuracy between the DS trained holistically and the ISAR Model.
 
 
 ### Parameter Estimation in the multi-annotator scenario (Section 5.3)
