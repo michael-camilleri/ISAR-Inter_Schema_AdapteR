@@ -29,7 +29,7 @@ DEFAULTS = \
      'Folds': '10'}                                                   # Number of Folds to use (folding is by Segment)
 
 # Some Constants
-PDF_ANNOT = npext.sum_to_one([49, 31, 11, 4, 10, 25, 9, 7, 6, 3, 3])    # Probability over Annotators
+PDF_ANNOT = npext.sum_to_one([49, 31, 11, 4, 10, 25, 9, 7, 6, 3, 3])  # Probability over Annotators
 sK = len(PDF_ANNOT)
 sS = 4
 # CD-Type per schema
