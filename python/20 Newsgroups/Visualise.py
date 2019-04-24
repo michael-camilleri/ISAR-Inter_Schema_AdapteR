@@ -34,7 +34,7 @@ if __name__=='__main__':
     # --- Improve Plot --- #
     plt.legend(fontsize=20, loc=4)
     plt.xlabel('Number of samples used for training', fontsize=20)
-    plt.ylabel('Mean F1 Score', fontsize=20)
+    plt.ylabel('F1 Score', fontsize=20)
     plt.tick_params(axis='both', which='major', labelsize=20)
     plt.grid(True, which='major', axis='both')
     plt.axes().yaxis.set_minor_locator(MLoc(0.025))
