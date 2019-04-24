@@ -175,7 +175,7 @@ if __name__ == '__main__':
             print(' - Training ISAR Model (holistically):')
             for nt in range(sN*sT):
                 for a in A[nt, :]:
-                    if np.isnan(Y[nt, a]): Y[nt, a] = NIS # If we are putting all as NIS
+                    if np.isnan(Y[nt, a]): Y[nt, a] = NIS  # If we are putting all as NIS
             for fold in range(sF):  # Iterate over folds
                 print(' ---> Fold {}'.format(fold))
                 # Split Training/Testing Sets
@@ -183,7 +183,7 @@ if __name__ == '__main__':
                 valid_idcs = np.equal(F, fold)
                 priors = [np.ones(sZ), np.ones([sZ, sK, sU])]
                 starts = [(npext.sum_to_one(np.ones(sZ)),
-                           np.stack([npext.sum_to_one(np.eye(sZ, sZ) + np.full([sZ, sZ], fill_value=0.01), axis=1)
+                           np.stack([npext.sum_to_one(np.eye(sZ, sU) + np.full([sZ, sU], fill_value=0.01), axis=1)
                                     for _ in range(sK)]).swapaxes(0, 1))]
                 # Train Model
                 isar_model = AnnotISAR(omega, -1, 100, sink=sys.stdout)

@@ -3,6 +3,8 @@ This is the ISAR Model, applied to the Crowd-sourcing task where P(U|Z) is a mix
 according to the Dawid-Skene Model.
 
 TODO: Use JiT Compilation on some of the for-loops
+
+N.B. This code is copied into my M.Sc Project -- If I do any changes, I should also change there.
 """
 from collections import namedtuple
 import numpy as np
@@ -271,7 +273,6 @@ class AnnotISAR(WorkerHandler):
             _final_llik.append(result.LogLikelihood)
             _evol_llik.append(result.LLEvolutions)
             _converged.append(result.Converged)
-
 
         # Convert to Numpy Arrays for Indexing
         _final_llik = np.asarray(_final_llik)

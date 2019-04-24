@@ -102,16 +102,16 @@ in parallel.
     * `-r 0` (Random State)
     * `-n 0 20` (Start index and number of independent runs)
     * `-f 10` (Number of folds)
- The remaining settings for each run are as follows (you may also wish to specify different output file names for each configuration as otherwise the results would be overwritten):
+   The remaining settings for each run are as follows (you may also wish to specify different output file names for each configuration as otherwise the results would be overwritten):
 
-  |     Case    |   -l    |     -s      |  -p   |
-  | ----------- | ------- | ----------- | ----- |
-  | `Realistic` | 60 5400 | 13 15 17 10 | true  |
-  | `Reduced`   | 500 100 | 13 15 17 10 | true  |
-  | `Uniform`   | 500 100 | 13 15 17 10 | unif  |
-  | `Dirichlet` | 500 100 | 13 15 17 10 | 10    |
-  | `Biased`    | 500 100 | 1  10 1  10 | true  |
-  | `Bias&Unif` | 500 100 | 1  10 1  10 | unif  |  
+      |     Case    |   -l    |     -s      |  -p   |
+      | ----------- | ------- | ----------- | ----- |
+      | `Realistic` | 60 5400 | 13 15 17 10 | true  |
+      | `Reduced`   | 500 100 | 13 15 17 10 | true  |
+      | `Uniform`   | 500 100 | 13 15 17 10 | unif  |
+      | `Dirichlet` | 500 100 | 13 15 17 10 | 10    |
+      | `Biased`    | 500 100 | 1  10 1  10 | true  |
+      | `Bias&Unif` | 500 100 | 1  10 1  10 | unif  |  
 
 
 2. Visualise the Results in Tabular Format: again, the default configuration (up to specification of which result files to use) is enough, but is given here for posterity:
