@@ -16,7 +16,7 @@ import sys
 
 # Load own packages
 sys.path.append('..')
-from Models import AnnotISAR
+from isar.models import AnnotISAR
 
 # Default Parameters
 DEFAULTS = {'Output':  '../../data/Parameters_ISAR',      # Result File

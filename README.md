@@ -13,13 +13,13 @@ This repository contains python code for replicating the Results in the Paper:
 
 ## Repository Structure
 
-At the top level, there are two `requirements` files, for easy installation of the necessary packages. All the code is packaged under the `python` directory which contains the following packages:
- * **Tools**: Contains in-house libraries/modules used by the remainder of the scripts: this includes a multi-processing wrapper for exploiting multi-core architectures and extensions to some numpy methods.
- * **Models**: Contains the ISAR implementations for the Multinomial Class-Conditional and Inter-Annotator Variability models.
- * **20 Newsgroups**: Contains scripts for replicating the results of the simulations on the 20 Newsgroups Dataset (i.e. Section 5.1 in the Paper).
- * **MRC Harwell**: Contains scripts for replicating the results of the simulations and analysis on the MRC Harwell Data (i.e. Sections 5.2.2, 5.3 and 5.4).
-
-There is also a `data` directory which at the outset contains the parameters for the MRC-Harwell-trained models which form the basis of our simulations. This is also the default directory for storing results from simulation runs (but can be configured, see below).
+At the top level, there are two `requirements` files, for easy installation of the necessary packages (except for the custom mpctools library: instructions for this are provided below). 
+There are 3 high-level directories:
+ * **isar**: Contains the ISAR implementations for the Multinomial Class-Conditional and Inter-Annotator Variability models under the `models` package.
+ * **scripts**: Contains the scripts for replicating the results in the paper.
+    * ***20 Newsgroups***: Contains scripts for replicating the results of the simulations on the 20 Newsgroups Dataset (i.e. Section 5.1 in the Paper).
+    * ***MRC Harwell***: Contains scripts for replicating the results of the simulations and analysis on the MRC Harwell Data (i.e. Sections 5.2.2, 5.3 and 5.4).
+ * **data**: Directory which at the outset contains the parameters for the MRC-Harwell-trained models which form the basis of our simulations. This is also the default directory for storing results from simulation runs (but can be configured, see below).
  
 In general, the replication scripts are split into two stages: one for simulating and training the models, and the other for visualising results.
 
@@ -37,6 +37,8 @@ The code also makes use of the following libraries: for simplicity, we provide c
  * pathos
  * pandas
  * numpy
+ 
+We also use our own externally packaged `mpctools` library. Instructions are provided below for setting it up.
 
 ### Installation Procedure
 
@@ -50,8 +52,19 @@ The code also makes use of the following libraries: for simplicity, we provide c
   ```bash
   pip install -r pip.req
   ```
+1. Download the mpctools library from https://github.com/michael-camilleri/mpctools and install (from within the top-level directory):
+  ```bash
+  python setup.py sdist --format=tar
+  pip install dist/mpctools-<version>.tar
+  ```
+  (replace `<version>` with the correct version).
 
-That is all! You are set to go.
+If you just want to replicate the results in the paper and that is all that is required. If however you wish to make use of the isar modules in another
+project we provide a setup script for installing it. Again, this is as simple as running the provided `setup.py` script:
+  ```bash
+  python setup.py sdist --format=tar
+  pip install dist/isar-0.9.1.tar
+  ```
 
 ## Replicating the Results
 

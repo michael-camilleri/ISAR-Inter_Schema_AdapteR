@@ -184,17 +184,12 @@ class AnnotDS(WorkerHandler):
         """
 
         # Call Super-Class
-        super(AnnotDS, self).__init__(_num_proc)
+        super(AnnotDS, self).__init__(_num_proc, sink)
 
         # Initialise own-stuff
         self.Dims = _dims
         self.__max_iter = _max_iter
         self.__toler = _toler
-        self.__sink = utils.NullableSink(sink)
-
-    def _write(self, *args):
-        self.__sink.write(*args)
-        self.__sink.flush()
 
     def fit_model(self, data_hot, prior, _starts=1):
         """
@@ -223,7 +218,7 @@ class AnnotDS(WorkerHandler):
             _starts = None
 
         # Initialise some stuff...
-        self._write('Fitting EM Model on Data with {0} starts, each running for (max) {1} iterations.\n'
+        self._print('Fitting EM Model on Data with {0} starts, each running for (max) {1} iterations.'
                     .format(workers, self.__max_iter))
         self.start_timer('global')
 
@@ -232,7 +227,7 @@ class AnnotDS(WorkerHandler):
         self.start_timer('em')
         results = self.run_workers(workers, self.EMWorker,
                                    _configs=(self.__max_iter, self.__toler, self.Dims, data_hot, prior, False),
-                                   _args=_starts, _sink=self.__sink.Obj)
+                                   _args=_starts)
         self.stop_timer('em')
 
         # Consolidate Data
@@ -244,8 +239,8 @@ class AnnotDS(WorkerHandler):
 
         # Display some statistics
         self._write('DS Model was fit in {0:1.5f}s of which:\n'.format(self.elapsed('global')))
-        self._write('\t\tExpectation Maximisation   : {0:1.3f}s ({1:1.5f}s/run)\n'.format(self.elapsed('em'),
-                                                                                          self.elapsed('em')/workers))
+        self._print('\t\tExpectation Maximisation   : {0:1.3f}s ({1:1.5f}s/run)'.format(self.elapsed('em'),
+                                                                                        self.elapsed('em')/workers))
 
         # Build (and return) Information Structure
         return {'Dims': self.Dims, 'Pi': pi, 'Psi': psi, 'Best': results['Best'], 'Converged': results['Converged'],

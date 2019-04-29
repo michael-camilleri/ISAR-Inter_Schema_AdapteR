@@ -15,7 +15,7 @@ from sklearn.metrics import f1_score
 
 # Load own packages
 sys.path.append('..')
-from Models import MultISAR
+from isar.models import MultISAR
 
 # Default Parameters
 DEFAULTS = \
@@ -92,7 +92,7 @@ if __name__ == '__main__':
                 elif (y >= sZ) and (mapper[y - sZ, z] == 1):  # Not In this Schema (Expertise)
                     omega[z, s, y] = 1.0
 
-    # ===== Simulate and Simultaneously Train Models: ===== #
+    # ===== Simulate and Simultaneously Train models: ===== #
     f1_metric = np.empty([run_length, len(args.increments) + 1])   # Array for Performance Metric
     aug_sizes = np.empty([run_length, len(args.increments) + 1])   # Array to keep track of lengths (due to randomness)
     # ---- Run RUN_LENGTH independent trials ----

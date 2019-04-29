@@ -16,7 +16,7 @@ import sys
 
 # Load own packages
 sys.path.append('..')
-from Models import AnnotDS, AnnotISAR
+from isar.models import AnnotDS, AnnotISAR
 
 # Default Parameters
 DEFAULTS = \
@@ -45,7 +45,7 @@ DS, ISAR = (0, 1)   # Position (index) into arrays
 if __name__ == '__main__':
 
     # ==== Parse Arguments ==== #
-    _arg_parse = argparse.ArgumentParser(description='Simulate and Train Annotator Models (based on DS and ISAR)')
+    _arg_parse = argparse.ArgumentParser(description='Simulate and Train Annotator models (based on DS and ISAR)')
     _arg_parse.add_argument('-o', '--output', help='Output Result files, one each for the results from the DS (trained '
                                                    'holistically) and ISAR models. Put "None" for any that you do not '
                                                    'want to simulate. Defaults to {}'
@@ -84,7 +84,7 @@ if __name__ == '__main__':
 
     # ==== Load/Prepare the Data ==== #
     np.random.seed(args.random)
-    # ---- Load Baseline Models ---- #
+    # ---- Load Baseline models ---- #
     with np.load('../../data/model.mrc.npz') as _data:
         omega = _data['omega']
         if args.pi.lower() == 'true':

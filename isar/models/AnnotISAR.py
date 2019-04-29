@@ -167,17 +167,12 @@ class AnnotISAR(WorkerHandler):
         """
 
         # Call Super-Class
-        super(AnnotISAR, self).__init__(_num_proc)
+        super(AnnotISAR, self).__init__(_num_proc, sink)
 
         # Initialise own-stuff
         self.Omega = omega
         self.__max_iter = _max_iter
         self.__toler = _toler
-        self.__sink = utils.NullableSink(sink)
-
-    def _write(self, *args):
-        self.__sink.write(*args)
-        self.__sink.flush()
 
     def fit_model(self, Y, S, prior, _starts=1):
         """
@@ -209,16 +204,17 @@ class AnnotISAR(WorkerHandler):
             _starts = None
 
         # Indicate Start of Fit
-        self._write('Fitting ISAR Model on Data with {0} starts, each running for (max) {1} iterations.\n'
+        self._print('Fitting ISAR Model on Data with {0} starts, each running for (max) {1} iterations.'
                     .format(workers, self.__max_iter))
         self.start_timer('global')
 
         # First Generate the M_Xi message
         self._write('Generating Latent-State Message (M_Omega)')
+        self._flush()
         self.start_timer('m_omega')
         _M_Omega = self.omega_msg(self.Omega, Y, S)
         self.stop_timer('m_omega')
-        self._write('... Done\n')
+        self._print('... Done')
 
         # Now Run EM on the Data
         self._write('Running EM:\n')
@@ -227,7 +223,7 @@ class AnnotISAR(WorkerHandler):
                                   _configs=self.EMWorker.ComputeCommon_t(max_iter=self.__max_iter,
                                                                          tolerance=self.__toler, m_omega=_M_Omega,
                                                                          prior_pi=prior[0], prior_psi=prior[1]),
-                                  _args=_starts, _sink=self.__sink.Obj)
+                                  _args=_starts)
         self.stop_timer('em')
 
         # Stop Main timer
@@ -236,8 +232,8 @@ class AnnotISAR(WorkerHandler):
         # Display some statistics
         self._write('ISAR Model was fit in {0:1.5f}s of which:\n'.format(self.elapsed('global')))
         self._write('\t\tGenerating Emission Messages : {0:1.3f}s\n'.format(self.elapsed('m_omega')))
-        self._write('\t\tExpectation Maximisation     : {0:1.3f}s ({1:1.5f}s/run)\n'.format(self.elapsed('em'),
-                                                                                            self.elapsed('em')/workers))
+        self._print('\t\tExpectation Maximisation     : {0:1.3f}s ({1:1.5f}s/run)'.format(self.elapsed('em'),
+                                                                                          self.elapsed('em')/workers))
 
         # Build (and return) Information Structure
         return self.AISARResults_t(ModelDims=[len(prior[0]), _M_Omega.shape[1], self.Omega.shape[0], self.Omega.shape[2]],

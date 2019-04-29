@@ -182,7 +182,7 @@ class MultISAR(WorkerHandler):
         """
 
         # Call Super-Class
-        super(MultISAR, self).__init__(_num_proc)
+        super(MultISAR, self).__init__(_num_proc, sink)
 
         # Initialise own-stuff
         self.Omega = omega
@@ -191,11 +191,6 @@ class MultISAR(WorkerHandler):
         self.__max_iter = _max_iter
         self.__toler = _toler
         self.__track_rate = _track_rate
-        self.__sink = utils.NullableSink(sink)
-
-    def _write(self, *args):
-        self.__sink.write(*args)
-        self.__sink.flush()
 
     def fit_model(self, features, labels, schema, prior, _starts=1):
         """
@@ -229,26 +224,27 @@ class MultISAR(WorkerHandler):
             _starts = None
 
         # Indicate Start of Fit
-        self._write('Fitting Multinomial ISAR Model on Data with {0} starts, each running for (max) {1} iterations.\n'
+        self._print('Fitting Multinomial ISAR Model on Data with {0} starts, each running for (max) {1} iterations.'
                     .format(workers, self.__max_iter))
         self.start_timer('global')
 
         # First Generate the M_Omega message
         self._write('Generating Latent-State Message (M_Omega)')
+        self._flush()
         self.start_timer('m_omega')
         _M_Omega = self.msg_omega(self.Omega, labels, schema)
         self.stop_timer('m_omega')
-        self._write('... Done\n')
+        self._print('... Done')
 
         # Now Run EM on the Data
-        self._write('Running EM:\n')
+        self._print('Running EM:')
         self.start_timer('em')
         results = self.run_workers(workers, self.EMWorker,
                                   _configs= self.EMWorker.ComputeCommon_t(max_iter=self.__max_iter, X=features,
                                                                           tolerance=self.__toler, m_omega=_M_Omega,
                                                                           update_rate=self.__track_rate,
                                                                           smoothing=prior),
-                                  _args=_starts, _sink=self.__sink.Obj)
+                                  _args=_starts)
         self.stop_timer('em')
 
         # Stop Main timer
@@ -257,8 +253,8 @@ class MultISAR(WorkerHandler):
         # Display some statistics
         self._write('MISAR Model was fit in {0:1.5f}s of which:\n'.format(self.elapsed('global')))
         self._write('\t\tGenerating Emission Messages : {0:1.3f}s\n'.format(self.elapsed('m_omega')))
-        self._write('\t\tExpectation Maximisation     : {0:1.3f}s ({1:1.5f}s/run)\n'.format(self.elapsed('em'),
-                                                                                            self.elapsed('em')/workers))
+        self._print('\t\tExpectation Maximisation     : {0:1.3f}s ({1:1.5f}s/run)'.format(self.elapsed('em'),
+                                                                                          self.elapsed('em')/workers))
         # Keep track of parameters:
         self.Pi = results.Pi.copy()
         self.Phi = results.Phi.copy()
