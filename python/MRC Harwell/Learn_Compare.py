@@ -7,6 +7,7 @@ assigned annotator does not provide a label, are interpreted as NIS.
 """
 
 from pandas.api.types import CategoricalDtype as CDType
+from mpctools.extensions import npext
 from itertools import cycle
 import pandas as pd
 import numpy as np
@@ -15,7 +16,6 @@ import sys
 
 # Load own packages
 sys.path.append('..')
-from Tools import npext
 from Models import AnnotDS, AnnotISAR
 
 # Default Parameters

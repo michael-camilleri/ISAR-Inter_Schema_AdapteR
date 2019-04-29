@@ -1,12 +1,12 @@
 """
 This is the Dawid-Skene Model, for comparing the ISAR model against.
 """
+from mpctools.multiprocessing import IWorker, WorkerHandler
 from sklearn.metrics import confusion_matrix
+from mpctools.extensions import npext, utils
 from scipy.stats import dirichlet
 import numpy as np
 import warnings
-
-from Tools import npext, WorkerHandler, NullableSink
 
 
 class AnnotDS(WorkerHandler):
@@ -22,7 +22,7 @@ class AnnotDS(WorkerHandler):
     """
 
     # ========================== Private Nested Implementations ========================== #
-    class EMWorker(WorkerHandler.Worker):
+    class EMWorker(IWorker):
         """
         (Private) Nested class for running the EM Algorithm
 
@@ -184,13 +184,13 @@ class AnnotDS(WorkerHandler):
         """
 
         # Call Super-Class
-        super(AnnotDS, self).__init__(_num_proc, sink)
+        super(AnnotDS, self).__init__(_num_proc)
 
         # Initialise own-stuff
         self.Dims = _dims
         self.__max_iter = _max_iter
         self.__toler = _toler
-        self.__sink = NullableSink(sink)
+        self.__sink = utils.NullableSink(sink)
 
     def _write(self, *args):
         self.__sink.write(*args)
@@ -230,9 +230,9 @@ class AnnotDS(WorkerHandler):
         # Perform EM (and format output)
         self._write('Running EM:\n')
         self.start_timer('em')
-        results = self.RunWorkers(workers, self.EMWorker, _configs=(self.__max_iter, self.__toler, self.Dims, data_hot,
-                                                                    prior, False),
-                                  _args=_starts)
+        results = self.run_workers(workers, self.EMWorker,
+                                   _configs=(self.__max_iter, self.__toler, self.Dims, data_hot, prior, False),
+                                   _args=_starts, _sink=self.__sink.Obj)
         self.stop_timer('em')
 
         # Consolidate Data
@@ -244,7 +244,8 @@ class AnnotDS(WorkerHandler):
 
         # Display some statistics
         self._write('DS Model was fit in {0:1.5f}s of which:\n'.format(self.elapsed('global')))
-        self._write('\t\tExpectation Maximisation   : {0:1.3f}s ({1:1.5f}s/run)\n'.format(self.elapsed('em'), self.elapsed('em')/workers))
+        self._write('\t\tExpectation Maximisation   : {0:1.3f}s ({1:1.5f}s/run)\n'.format(self.elapsed('em'),
+                                                                                          self.elapsed('em')/workers))
 
         # Build (and return) Information Structure
         return {'Dims': self.Dims, 'Pi': pi, 'Psi': psi, 'Best': results['Best'], 'Converged': results['Converged'],

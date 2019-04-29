@@ -8,7 +8,7 @@
   d) Remove some labels
   e) Group the data as required...
 """
-
+from mpctools.extensions import npext
 import numpy as np
 import argparse
 import sys
@@ -19,7 +19,6 @@ from sklearn.feature_extraction.text import CountVectorizer
 
 # Need to append parent folder to path
 sys.path.append('../')
-from Tools import npext
 
 DEFAULTS = {'Name': '../../data/20NG_BOW',     # Name of the output data-file
             'Random': '1010',                  # Random Seed State

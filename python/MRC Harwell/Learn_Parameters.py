@@ -9,13 +9,13 @@ This stems from our modelling behaviour, in that if the annotator does not label
 not in-schema (i.e. we do not model missing-at-random behaviour.
 """
 
+from mpctools.extensions import npext
 import numpy as np
 import argparse
 import sys
 
 # Load own packages
 sys.path.append('..')
-from Tools import npext
 from Models import AnnotISAR
 
 # Default Parameters

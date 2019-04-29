@@ -2,13 +2,10 @@
 Script to analyse the ISAR model in terms of its Entropy/Information Content. We do this by way of the Mutual
 Information and Redundancy. Refer to the Paper for references.
 """
+from mpctools.extensions import npext
 from itertools import combinations
 from scipy.special import comb
 import numpy as np
-import sys
-
-sys.path.append('..')
-from Tools import npext
 
 # Some Defaults
 SCHEMAS = ['I', 'II', 'III', 'IV']

@@ -1,14 +1,14 @@
 """
 This is the ISAR Model, applied to a Supervised Learning Scenario: in this case, where X|Z is a multinomial
 """
+from mpctools.multiprocessing import IWorker, WorkerHandler
+from mpctools.extensions import npext, utils
 from sklearn.naive_bayes import MultinomialNB
 from collections import namedtuple
 
 import numpy as np
 import time as tm
 import warnings
-
-from Tools import npext, WorkerHandler, NullableSink
 
 
 class MultISAR(WorkerHandler):
@@ -22,7 +22,7 @@ class MultISAR(WorkerHandler):
                                                    'LogLikelihood', 'Evolutions', 'Times'])
 
     # ========================== Private Nested Implementations ========================== #
-    class EMWorker(WorkerHandler.Worker):
+    class EMWorker(IWorker):
         """
         (Private) Nested class for running the EM Algorithm
         """
@@ -182,7 +182,7 @@ class MultISAR(WorkerHandler):
         """
 
         # Call Super-Class
-        super(MultISAR, self).__init__(_num_proc, sink)
+        super(MultISAR, self).__init__(_num_proc)
 
         # Initialise own-stuff
         self.Omega = omega
@@ -191,7 +191,7 @@ class MultISAR(WorkerHandler):
         self.__max_iter = _max_iter
         self.__toler = _toler
         self.__track_rate = _track_rate
-        self.__sink = NullableSink(sink)
+        self.__sink = utils.NullableSink(sink)
 
     def _write(self, *args):
         self.__sink.write(*args)
@@ -243,12 +243,12 @@ class MultISAR(WorkerHandler):
         # Now Run EM on the Data
         self._write('Running EM:\n')
         self.start_timer('em')
-        results = self.RunWorkers(workers, self.EMWorker,
+        results = self.run_workers(workers, self.EMWorker,
                                   _configs= self.EMWorker.ComputeCommon_t(max_iter=self.__max_iter, X=features,
                                                                           tolerance=self.__toler, m_omega=_M_Omega,
                                                                           update_rate=self.__track_rate,
                                                                           smoothing=prior),
-                                  _args=_starts)
+                                  _args=_starts, _sink=self.__sink.Obj)
         self.stop_timer('em')
 
         # Stop Main timer
