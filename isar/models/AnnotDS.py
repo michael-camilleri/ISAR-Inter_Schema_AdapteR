@@ -1,9 +1,9 @@
 """
 This is the Dawid-Skene Model, for comparing the ISAR model against.
 """
-from mpctools.multiprocessing import IWorker, WorkerHandler
+from mpctools.parallel import IWorker, WorkerHandler
 from sklearn.metrics import confusion_matrix
-from mpctools.extensions import npext, utils
+from mpctools.extensions import npext
 from scipy.stats import dirichlet
 import numpy as np
 import warnings

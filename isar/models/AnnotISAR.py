@@ -6,11 +6,13 @@ TODO: Use JiT Compilation on some of the for-loops
 
 N.B. This code is copied into my M.Sc Project -- If I do any changes, I should also change there.
 """
-from mpctools.multiprocessing import WorkerHandler, IWorker
-from mpctools.extensions import npext, utils
+from mpctools.parallel import WorkerHandler, IWorker
+from mpctools.extensions import npext
 from collections import namedtuple
 import numpy as np
 import warnings
+
+MAX_MEMORY = 200000
 
 
 class AnnotISAR(WorkerHandler):
@@ -33,7 +35,8 @@ class AnnotISAR(WorkerHandler):
         """
         # Definition of Named Data-Types
         ComputeCommon_t = namedtuple('ComputeParams_t', ['max_iter', 'tolerance', 'm_omega', 'prior_pi', 'prior_psi'])
-        Messages_t = namedtuple('Messages_t', ['m_omega_star', 'm_omega_star_sum_u', 'm_psi_pi', 'm_psi_pi_sum_z'])
+        Messages_t_old = namedtuple('Messages_t', ['m_omega_star', 'm_omega_star_sum_u', 'm_psi_pi', 'm_psi_pi_sum_z'])
+        Responsibilities_t = namedtuple('Responsibilities_t', ['gamma', 'rho_sum', 'log_likelihood'])
         ComputeResult_t = namedtuple('ComputeResult_t', ['Pi', 'Psi', 'LogLikelihood', 'Converged', 'LLEvolutions'])
 
         def __init__(self, _id, _handler):
@@ -84,24 +87,25 @@ class AnnotISAR(WorkerHandler):
             # Start the Loop: we make heavy use of Message Passing (Pg 23)
             # Note that we pre-compute the first set of messages, since due to efficiency, we compute the msgs at the
             #   end of the loop, since they are needed for the Likelihood Computation
-            msg = self._compute_messages(_common.m_omega, pi, psi)
+            msg = self._compute_messages_old(_common.m_omega, pi, psi)
 
             while iterations < _common.max_iter and not self._converged(loglikelihood, _common.tolerance):
                 # -------------- E-Step: -------------- #
-                # First Compute Gamma
-                gamma = np.divide(msg.m_psi_pi, msg.m_psi_pi_sum_z)                            # Gamma  [N, |Z|, 1,  1 ]
-                # Now Compute Rho
-                rho = np.multiply(np.divide(gamma, msg.m_omega_star_sum_u), msg.m_omega_star)  # Rho    [N, |Z|, K, |U|]
+                # First Compute Gamma [N, |Z|, 1,  1 ]
+                gamma = np.divide(msg.m_psi_pi, msg.m_psi_pi_sum_z)
+                # Now Compute Rho {Or rather its sum} [|Z|, K, |U|]
+                #   In order to guard against memory errors, we allow for a broken down computation, where we iterate
+                #   over groups of rows of the N-index
+                rho_n = np.multiply(np.divide(gamma, msg.m_omega_star_sum_u), msg.m_omega_star).sum(axis=0)
 
                 # -------------- M-Step: -------------- #
                 # Now Compute Pi
                 pi = (np.sum(gamma, axis=0).squeeze() + _common.prior_pi)/pi_denom
                 # Finally Compute Psi
-                rho_n = np.sum(rho, axis=0)                                                 # Rho'  [|Z|, K, |U|]
                 psi = np.divide(rho_n + _common.prior_psi, np.sum(rho_n, axis=2, keepdims=True) + psi_den_p)
 
                 # -------------- Message Preparation -------------- #
-                msg = self._compute_messages(_common.m_omega, pi, psi)
+                msg = self._compute_messages_old(_common.m_omega, pi, psi)
 
                 # ------------ Likelihood Computation ----------- #
                 loglikelihood.append(pi_dir.logpdf(pi) + np.sum(psi_dir.logpdf(psi)) + np.sum(np.log(msg.m_psi_pi_sum_z)))
@@ -121,7 +125,7 @@ class AnnotISAR(WorkerHandler):
                                         LLEvolutions=loglikelihood)
 
         @staticmethod
-        def _compute_messages(m_omega: np.ndarray, pi, psi):
+        def _compute_messages_old(m_omega: np.ndarray, pi, psi):
             """
             Compute the Messages for this iteration
 
@@ -135,7 +139,57 @@ class AnnotISAR(WorkerHandler):
             m_psi_pi = np.multiply(np.prod(m_omega_star_sum_u, axis=2, keepdims=True),
                                    pi[np.newaxis, :, np.newaxis, np.newaxis])                   # [N, |Z|, 1,  1 ]
             m_psi_pi_sum_z = np.sum(m_psi_pi, axis=1, keepdims=True)                            # [N,  1,  1,  1 ]
-            return AnnotISAR.EMWorker.Messages_t(m_omega_star, m_omega_star_sum_u, m_psi_pi, m_psi_pi_sum_z)
+            return AnnotISAR.EMWorker.Messages_t_old(m_omega_star, m_omega_star_sum_u, m_psi_pi, m_psi_pi_sum_z)
+
+        @staticmethod
+        def _compute_responsibilities(m_omega: np.ndarray, pi, psi):
+            """
+            Compute the Responsibilities and subsequently the Log-Likelihood
+
+            :param m_omega: Omega Message
+            :param pi:      Latent Probabilities
+            :param psi:     Emission Probabilities
+            :return:        Responsibilities_t Named Tuple
+            """
+            # ---- Define the Sizes we will work with ---- #
+            sZ, sK, sU = psi.shape
+            sN = m_omega.shape[0]
+
+            # ---- Prepare Space ---- #
+            rho_sum = np.zeros_like(psi)
+            gamma = np.empty([sN, sZ])
+            log_likelihood = 0
+            pi = pi[np.newaxis, :, np.newaxis, np.newaxis]
+            psi = psi[np.newaxis, :, :, :]
+
+            # ---- Now Iterate over N ---- #
+            cN = 0
+            while cN < sN:
+                # ++++ Identify indices to work with ++++ #
+                max_idx = min(cN + MAX_MEMORY, sN)
+                omega_subset = m_omega[cN:max_idx, np.newaxis, :, :]
+
+                # ++++ Compute Messages ++++ #
+                m_omega_star = np.multiply(omega_subset, psi)                                   # [N, |Z|, K, |U|]
+                m_omega_star_sum_u = np.sum(m_omega_star, axis=3, keepdims=True)                # [N, |Z|, K,  1 ]
+                m_psi_pi = np.multiply(np.prod(m_omega_star_sum_u, axis=2, keepdims=True), pi)  # [N, |Z|, 1,  1 ]
+                m_psi_pi_sum_z = np.sum(m_psi_pi, axis=1, keepdims=True)                        # [N,  1,  1,  1 ]
+
+                # ++++ Update Gamma ++++ #
+                gamma_subset = np.divide(m_psi_pi, m_psi_pi_sum_z)
+                gamma[cN:max_idx, :] = gamma_subset.squeeze()
+
+                # ++++ Update Rho_sum ++++ #
+                rho_sum += np.multiply(np.divide(gamma_subset, m_omega_star_sum_u), m_omega_star).sum(axis=0)
+
+                # ++++ Update Log-Likelihood ++++ #
+                log_likelihood += np.sum(np.log(m_psi_pi_sum_z))
+
+                # ++++ Update Indexing ++++ #
+                cN = max_idx
+
+            # ---- Return the Result ---- #
+            return AnnotISAR.EMWorker.Responsibilities_t(gamma, rho_sum, log_likelihood)
 
         @staticmethod
         def _converged(likelihoods, tolerance):
@@ -331,7 +385,7 @@ class AnnotISAR(WorkerHandler):
                             returns the conditional probability distribution
         """
         # Compute Messages and Responsibility
-        msgs = AnnotISAR.EMWorker._compute_messages(m_omega, pi, psi)
+        msgs = AnnotISAR.EMWorker._compute_messages_old(m_omega, pi, psi)
         gamma = np.divide(msgs.m_psi_pi, msgs.m_psi_pi_sum_z).squeeze()
 
         # Branch on whether to compute MAP or just output probabilities
@@ -354,7 +408,7 @@ class AnnotISAR(WorkerHandler):
         :return:
         """
         _m_omega = AnnotISAR.omega_msg(theta[2], hot, sch)
-        _msgs = AnnotISAR.EMWorker._compute_messages(_m_omega, theta[0], theta[1])
+        _msgs = AnnotISAR.EMWorker._compute_messages_old(_m_omega, theta[0], theta[1])
         if prior is not None:
             return npext.Dirichlet(prior[0] + 1.0).logpdf(theta[0]) + \
                    np.sum(npext.Dirichlet(prior[1] + 1.0).logpdf(theta[1])) + np.sum(np.log(_msgs.m_psi_pi_sum_z))

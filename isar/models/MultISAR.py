@@ -1,9 +1,9 @@
 """
 This is the ISAR Model, applied to a Supervised Learning Scenario: in this case, where X|Z is a multinomial
 """
-from mpctools.multiprocessing import IWorker, WorkerHandler
-from mpctools.extensions import npext, utils
+from mpctools.parallel import IWorker, WorkerHandler
 from sklearn.naive_bayes import MultinomialNB
+from mpctools.extensions import npext
 from collections import namedtuple
 
 import numpy as np
