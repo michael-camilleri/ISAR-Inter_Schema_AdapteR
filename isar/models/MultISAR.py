@@ -15,6 +15,8 @@ class MultISAR(WorkerHandler):
     """
     This Class implements the Multinomial ISAR Model, in a multi-processing framework (allowing multiple independent
     restarts to happen in parallel)
+
+    TODO: Ensure that the nan-based computation of log-likelihood is correct.
     """
     # ============================== Data Type Definitions =============================== #
     WorkerResults_t = namedtuple('WorkerResults_t', ['Pi', 'Phi', 'LogLikelihood', 'Converged', 'Best', 'Evolutions'])

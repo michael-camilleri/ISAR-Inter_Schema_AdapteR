@@ -19,6 +19,9 @@ class AnnotDS(WorkerHandler):
          manifestations one is interested in: if the categorical variable has more categories than what is required,
          recategorise before passing the data - otherwise, it will compute for more labels than is necessary, and not
          only will it impact performance, but may also bias results...
+
+    ToDo: Fix the inconsistent computation of log-likelihood (which is mixing values from previous and subsequent
+          parameter estimates.
     """
 
     # ========================== Private Nested Implementations ========================== #
