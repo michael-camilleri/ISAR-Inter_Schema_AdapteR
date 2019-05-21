@@ -16,7 +16,7 @@ import sys
 
 # Load own packages
 sys.path.append('..')
-from isar.models import AnnotDS, AnnotISAR
+from isar.models import DawidSkeneIID, AnnotISAR
 
 # Default Parameters
 DEFAULTS = \
@@ -148,7 +148,7 @@ if __name__ == '__main__':
                 # Split Training/Testing Sets
                 train_idcs = np.not_equal(F, fold)
                 valid_idcs = np.equal(F, fold)
-                priors = [np.ones(sZ), np.ones([sZ, sK * sU])]  # Prior Smoothers of 1s
+                priors = [np.ones(sZ)*2, np.ones([sZ, sK * sU])*2]  # Prior Probabilities
                 starts = [(npext.sum_to_one(np.ones(sZ)),  # Starting Probabilities
                            np.tile(npext.sum_to_one(np.eye(sZ, sU) + np.full([sZ, sU], fill_value=0.01), axis=1), sK))]
                 _Y_Hot_train = pd.get_dummies(pd.DataFrame(Y[train_idcs]).astype(CDTYPES[-1])).values
@@ -156,7 +156,7 @@ if __name__ == '__main__':
                 label_set = CDTYPES[-1].categories.values
                 sM = len(_Y_Hot_train)
                 # Train Model
-                ds_model = AnnotDS([sM, sZ, sK, sU], -1, 100, sink=sys.stdout)
+                ds_model = DawidSkeneIID([sM, sZ, sK, sU], -1, 100, sink=sys.stdout)
                 results = ds_model.fit_model(_Y_Hot_train, priors, starts)
                 # Validate Model
                 Z_valid = Z[valid_idcs]

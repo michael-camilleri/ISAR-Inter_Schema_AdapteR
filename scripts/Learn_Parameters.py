@@ -182,7 +182,7 @@ if __name__ == '__main__':
             # Extract Sub-Set(s) to operate on
             y_i = Y[:sizes[run, i], :]
             s_i = S[:sizes[run, i], :] if args.different else S[:sizes[run, i]]
-            priors = [np.ones(sZ), np.ones([sZ, sK, sU])]
+            priors = [np.ones(sZ)*2, np.ones([sZ, sK, sU])*2]
             starts = [(npext.sum_to_one(np.ones(sZ)),
                        np.stack([npext.sum_to_one(np.eye(sZ, sZ) + np.full([sZ, sZ], fill_value=0.01), axis=1)
                                  for _ in range(sK)]).swapaxes(0, 1))]

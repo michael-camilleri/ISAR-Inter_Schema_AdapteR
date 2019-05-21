@@ -35,7 +35,6 @@ class AnnotISAR(WorkerHandler):
         """
         # Definition of Named Data-Types
         ComputeCommon_t = namedtuple('ComputeParams_t', ['max_iter', 'tolerance', 'm_omega', 'prior_pi', 'prior_psi'])
-        Messages_t_old = namedtuple('Messages_t', ['m_omega_star', 'm_omega_star_sum_u', 'm_psi_pi', 'm_psi_pi_sum_z'])
         Responsibilities_t = namedtuple('Responsibilities_t', ['gamma', 'rho_sum', 'log_likelihood'])
         ComputeResult_t = namedtuple('ComputeResult_t', ['Pi', 'Psi', 'LogLikelihood', 'Converged', 'LLEvolutions'])
 
