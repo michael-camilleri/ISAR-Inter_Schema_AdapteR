@@ -5,11 +5,8 @@ conditions.
 The Simulation process does not generate any Missing-At-Random data, and hence, in this case, all Samples where the
 assigned annotator does not provide a label, are interpreted as NIS.
 """
-
-from pandas.api.types import CategoricalDtype as CDType
 from mpctools.extensions import npext
 from itertools import cycle
-import pandas as pd
 import numpy as np
 import argparse
 import sys
@@ -20,25 +17,18 @@ from isar.models import DawidSkeneIID, AnnotISAR
 
 # Default Parameters
 DEFAULTS = \
-    {'Output': ['../../data/Compare_DS', '../../data/Compare_ISAR'],  # File-Names
-     'Random': '0',                                                   # Random Seed offset
-     'Numbers': ['0', '20'],                                          # Range: start index, number of runs
-     'Lengths': ['60', '5400'],                                       # Number and length of segments
-     'Schemas': ['13', '15', '17', '10'],                             # Probability over Schemas,
-     'Pi': 'true',                                                    # Pi mode
-     'Folds': '10'}                                                   # Number of Folds to use (folding is by Segment)
+    {'Output': ['../data/Compare_DS', '../data/Compare_ISAR'],  # File-Names
+     'Random': '0',                                             # Random Seed offset
+     'Numbers': ['0', '20'],                                    # Range: start index, number of runs
+     'Lengths': ['500', '100'],                                 # Number and length of segments
+     'Schemas': ['13', '15', '17', '10'],                       # Probability over Schemas,
+     'Pi': 'unif',                                              # Pi mode
+     'Folds': '10'}                                             # Number of Folds to use (folding is by Segment)
 
 # Some Constants
 PDF_ANNOT = npext.sum_to_one([49, 31, 11, 4, 10, 25, 9, 7, 6, 3, 3])  # Probability over Annotators
 sK = len(PDF_ANNOT)
 sS = 4
-# CD-Type per schema
-CDTYPES = (CDType(categories=[0, 1, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]),           # I
-           CDType(categories=[0, 1, 5, 6, 7, 10, 12]),                           # II
-           CDType(categories=[0, 1, 4, 5, 6, 7, 8, 9, 10, 11]),                  # III
-           CDType(categories=[0, 1, 2, 5, 6, 7, 10, 11]),                        # IV
-           CDType(categories=[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]))        # Full Label-Set (for DS_ALL)
-
 nA = 3              # Number of Annotators in any one sample
 DS, ISAR = (0, 1)   # Position (index) into arrays
 
@@ -85,7 +75,7 @@ if __name__ == '__main__':
     # ==== Load/Prepare the Data ==== #
     np.random.seed(args.random)
     # ---- Load Baseline models ---- #
-    with np.load('../../data/model.mrc.npz') as _data:
+    with np.load('../data/model.mrc.npz') as _data:
         omega = _data['omega']
         if args.pi.lower() == 'true':
             pi = _data['pi']
@@ -145,29 +135,26 @@ if __name__ == '__main__':
             print(' - Training DS Model (Holistically):')
             for fold in range(sF):  # Iterate over folds
                 print(' ---> Fold {}'.format(fold))
-                # Split Training/Testing Sets
+                # Split Training/Testing Sets and get the relevant subsets
                 train_idcs = np.not_equal(F, fold)
                 valid_idcs = np.equal(F, fold)
-                priors = [np.ones(sZ)*2, np.ones([sZ, sK * sU])*2]  # Prior Probabilities
-                starts = [(npext.sum_to_one(np.ones(sZ)),  # Starting Probabilities
-                           np.tile(npext.sum_to_one(np.eye(sZ, sU) + np.full([sZ, sU], fill_value=0.01), axis=1), sK))]
-                _Y_Hot_train = pd.get_dummies(pd.DataFrame(Y[train_idcs]).astype(CDTYPES[-1])).values
-                _Y_Hot_valid = pd.get_dummies(pd.DataFrame(Y[valid_idcs]).astype(CDTYPES[-1])).values
-                label_set = CDTYPES[-1].categories.values
-                sM = len(_Y_Hot_train)
-                # Train Model
-                ds_model = DawidSkeneIID([sM, sZ, sK, sU], -1, 100, sink=sys.stdout)
-                results = ds_model.fit_model(_Y_Hot_train, priors, starts)
-                # Validate Model
+                U_train = Y[train_idcs]
+                U_valid = Y[valid_idcs]
                 Z_valid = Z[valid_idcs]
                 S_valid = S[valid_idcs]
-                map_pred = ds_model.estimate_map(results['Pi'], results['Psi'], _Y_Hot_valid, label_set, max_size=sZ)
-                predictions = np.argmax(map_pred, axis=1)
-                pred_likels = map_pred[np.arange(len(map_pred)), Z_valid]
+                # Train Model
+                priors = [np.ones(sZ)*2, np.ones([sZ, sK, sU])*2]  # Prior Probabilities (actual alphas)
+                starts = [(npext.sum_to_one(np.ones(sZ)),           # Starting Probabilities
+                           np.tile(npext.sum_to_one(np.eye(sZ, sU) + np.full([sZ, sU], fill_value=0.01), axis=1)[:, np.newaxis, :], [1, sK, 1]))]
+                ds_model = DawidSkeneIID([sZ, sK], None, random_state=args.random, sink=sys.stdout)
+                ds_model.fit(U_train, priors, starts)
+                # Validate Model
+                z_predict = ds_model.predict(U_valid)
+                z_log_correct_post = ds_model.predict_proba(U_valid)[np.arange(len(Z_valid)), Z_valid]
                 for s in range(sS):
                     schema_idcs = np.equal(S_valid, s)
-                    pred_corr_DS[run, s] += np.equal(predictions[schema_idcs], Z_valid[schema_idcs]).sum()
-                    pred_wght_DS[run, s] += np.log(pred_likels[schema_idcs]).sum()
+                    pred_corr_DS[run, s] += np.equal(z_predict[schema_idcs], Z_valid[schema_idcs]).sum()
+                    pred_wght_DS[run, s] += np.log(z_log_correct_post[schema_idcs]).sum()
 
         # [C] - Train ISAR Model - but first, we have to identify NIS (i.e. when the responsible annotators do not
         #       provide a label.
