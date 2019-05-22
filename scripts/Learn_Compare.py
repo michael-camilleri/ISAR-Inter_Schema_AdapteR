@@ -143,11 +143,11 @@ if __name__ == '__main__':
                 Z_valid = Z[valid_idcs]
                 S_valid = S[valid_idcs]
                 # Train Model
-                priors = [np.ones(sZ)*2, np.ones([sZ, sK, sU])*2]  # Prior Probabilities (actual alphas)
+                priors = [np.ones(sZ)*2, np.ones([sZ, sK, sU])*2]   # Prior Probabilities (actual alphas)
                 starts = [(npext.sum_to_one(np.ones(sZ)),           # Starting Probabilities
                            np.tile(npext.sum_to_one(np.eye(sZ, sU) + np.full([sZ, sU], fill_value=0.01), axis=1)[:, np.newaxis, :], [1, sK, 1]))]
                 ds_model = DawidSkeneIID([sZ, sK], None, random_state=args.random, sink=sys.stdout)
-                ds_model.fit(U_train, priors, starts)
+                ds_model.fit(U_train, None, priors, starts)
                 # Validate Model
                 z_predict = ds_model.predict(U_valid)
                 z_log_correct_post = ds_model.predict_proba(U_valid)[np.arange(len(Z_valid)), Z_valid]
@@ -162,7 +162,7 @@ if __name__ == '__main__':
             print(' - Training ISAR Model (holistically):')
             for nt in range(sN*sT):
                 for a in A[nt, :]:
-                    if np.isnan(Y[nt, a]): Y[nt, a] = NIS  # If we are putting all as NIS
+                    if np.isnan(Y[nt, a]): Y[nt, a] = NIS  # We are putting all as NIS
             for fold in range(sF):  # Iterate over folds
                 print(' ---> Fold {}'.format(fold))
                 # Split Training/Testing Sets

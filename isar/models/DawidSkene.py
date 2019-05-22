@@ -2,6 +2,7 @@
 This is the Dawid-Skene Model, for comparing the ISAR model against.
 """
 from mpctools.parallel import IWorker, WorkerHandler
+from sklearn.metrics import confusion_matrix
 from mpctools.extensions import npext
 from collections import namedtuple
 from numba import jit, float64
@@ -48,16 +49,23 @@ class DawidSkeneIID(WorkerHandler):
         else:
             self.Pi, self.Psi = params
 
-    def fit(self, U, priors, starts, return_diagnostics=False):
+    def fit(self, U, z=None, priors=None, starts=1, return_diagnostics=False, learn_prior=True):
         """
-        Fit the Parameters Pi/Psi to the data, and generate MAP estimates for the latent behaviour:
+        Fit the Parameters Pi/Psi to the data, in either a supervised or unsupervised manner.
 
         :param U:        Observations:  Size N x K. Note that where the annotator does not label a sample, this should
                          be represented by NaN
-        :param priors:   Prior Probabilities for Pi and Psi [|Z|, |Z| x K x |U|]
+        :param z:        If not None, then this amounts to supervised learning: otherwise, we use EM in an unsupervised
+                         manner.
+        :param priors:   Prior Probabilities for Pi and Psi [|Z|, |Z| x K x |U|]. Note that if none, then this amounts to
+                         0 counts (alpha = 1)
         :param starts:   This must be the list of Starting points (each starting point should be a tuple/list,
-                              containing the starting pi/psi matrices). Note that in this case, they may be modified.
+                         containing the starting pi/psi matrices). Note that in this case, they may be modified. If not
+                         provided, then a single start with random (dirichlet) counts (from prior) is generated.
         :param return_diagnostics: If true, return a named tuple of type DSIIDResult_t containing diagnostic information
+                         Note, that this is only applicable if z is None (i.e. unsupervised)
+        :param learn_prior: Only applicable when performing supervised learning. If False, then instead of using the
+                         data to learn the distribution over Z, this is taken to be the prior probability.
         :return:  Self, (Diagnostics) : Self for chaining, Diagnostics if requested. These contain:
                         * Pi : Fitted Prior over Targets
                         * Psi: Annotator Confusion Matrix
@@ -65,36 +73,69 @@ class DawidSkeneIID(WorkerHandler):
                         * Best: The index of the run with the best log-likelihood
                         * LLEvolutions: The evolution of the log-likelihood for all runs.
         """
-        # Handle Starts
-        num_work = len(starts)
+        # Branch based on whether we are doing this in a supervised or unsupervised fashion.
+        if z is not None:
+            self._print('Fitting DS Model in a supervised fashion.')
 
-        # Initialise some stuff...
-        self._print('Fitting EM Model on Data with {0} starts, each running for (max) {1} iterations.'
-                    .format(num_work, self.__max_iter))
-        self.start_timer('global')
+            # --- Handle Prior Smoothing --- #
+            if priors is None:
+                assert learn_prior is True, 'If Not Learning Prior, then you must define the Priors'
+                self.Pi = np.zeros_like(self.Pi)
+                self.Psi = np.zeros_like(self.Psi)
+            else:
+                self.Pi = priors[0] - 1
+                self.Psi = priors[1] - 1
 
-        # Perform EM (and format output)
-        self._write('Running EM:\n')
-        self.start_timer('em')
-        results = self.run_workers(num_work, self.EMWorker,
-                                   _configs=self.EMWorker.ComputeParams_t(self.__max_iter, self.__toler, U, *priors),
-                                   _args=starts)
-        self.stop_timer('em')
+            # --- Construct prior on z: --- #
+            #  --- Note, that if not specified, then prior
+            if learn_prior:
+                val, cnts = np.unique(z.astype(int), return_counts=True)  # Guard against some values not appearing!
+                self.Pi[val] += cnts
+            self.Pi = npext.sum_to_one(self.Pi)
 
-        # Consolidate Data
-        self.Pi = results.Pi
-        self.Psi = results.Psi
+            # --- Construct Conditional on U from confusion matrices --- #
+            for k in range(self.sK):
+                self.Psi[:, k, :] += confusion_matrix(z, U[:, k], labels=np.arange(len(self.Pi)))
+            self.Psi = npext.sum_to_one(self.Psi, axis=-1)
 
-        # Stop Main timer
-        self.stop_timer('global')
+            # --- Return Self (chaining) --- #
+            return self
 
-        # Display some statistics
-        self._write('DS Model was fit in {0:1.5f}s of which:\n'.format(self.elapsed('global')))
-        self._print('\t\tExpectation Maximisation   : {0:1.3f}s ({1:1.5f}s/run)'.format(self.elapsed('em'),
-                                                                                        self.elapsed('em')/num_work))
+        else:
+            # --- Initialise some stuff --- #
+            self._print('Fitting DS Model using Expectation Maximisation')
 
-        # Build (and return) Information Structure
-        return (self, results) if return_diagnostics else self
+            # --- Handle Priors first --- #
+            if priors is None:
+                priors = (np.ones_like(self.Pi), np.ones_like(self.Psi))
+
+            # --- Now Handle Starting Points --- #
+            np.random.seed(self.__rand)
+            if hasattr(starts, '__len__'):
+                num_work = len(starts)
+            else:
+                num_work = starts
+                starts = [(npext.Dirichlet(priors[0]).sample(), npext.Dirichlet(priors[1]).sample())
+                          for _ in range(num_work)]
+
+            # Perform EM (and format output)
+            self._print('Running {0} starts for (max) {1} iterations.'.format(num_work, self.__max_iter))
+            self.start_timer('global')
+            results = self.run_workers(num_work, self._EMWorker,
+                                       _configs=self._EMWorker.ComputeParams_t(self.__max_iter, self.__toler, U, *priors),
+                                       _args=starts)
+            # Consolidate Data
+            self.Pi = results.Pi
+            self.Psi = results.Psi
+            # Stop Main timer
+            self.stop_timer('global')
+
+            # Display some statistics
+            self._write('DS Model was fit in {0:1.5f}s ({1:1.5f}s/run):\n'.format(self.elapsed('global'),
+                                                                                  self.elapsed('global')/num_work))
+
+            # Build (and return) Information Structure
+            return (self, results) if return_diagnostics else self
 
     def evidence_log_likelihood(self, U, prior=None):
         """
@@ -107,9 +148,9 @@ class DawidSkeneIID(WorkerHandler):
         """
         if prior is not None:
             return npext.Dirichlet(prior[0]).logsumpdf(self.Pi) + npext.Dirichlet(prior[1]).logsumpdf(self.Psi) + \
-                   self.EMWorker._compute_responsibilities(U, self.Pi, self.Psi).log_likelihood
+                   self._EMWorker._compute_responsibilities(U, self.Pi, self.Psi).log_likelihood
         else:
-            return self.EMWorker._compute_responsibilities(U, self.Pi, self.Psi).log_likelihood
+            return self._EMWorker._compute_responsibilities(U, self.Pi, self.Psi).log_likelihood
 
     def predict(self, U):
         """
@@ -118,7 +159,7 @@ class DawidSkeneIID(WorkerHandler):
         :param U:  Observations: Size N by K (of domain |U| with missing data as NaN)
         :return:   Predictions over the latent states
         """
-        return np.argmax(self.EMWorker._compute_responsibilities(U, self.Pi, self.Psi).gamma, axis=-1)
+        return np.argmax(self._EMWorker._compute_responsibilities(U, self.Pi, self.Psi).gamma, axis=-1)
 
     def predict_proba(self, U):
         """
@@ -127,9 +168,9 @@ class DawidSkeneIID(WorkerHandler):
         :param U:  Observations: Size N by K (of domain |U| with missing data as NaN)
         :return:   Distribution over latent state Z
         """
-        return self.EMWorker._compute_responsibilities(U, self.Pi, self.Psi).gamma
+        return self._EMWorker._compute_responsibilities(U, self.Pi, self.Psi).gamma
 
-    def aggregate_results(self, results):
+    def _aggregate_results(self, results):
         """
         Maximise parameters over runs: for comparison's sake, it assumes that the pi's and psi's are sorted in a
         consistent order (for comparison).
@@ -175,33 +216,6 @@ class DawidSkeneIID(WorkerHandler):
         return self.DSIIDResult_t(_best_pi, _best_psi, _converged, _best_index, _evol_llikel)
 
     # @staticmethod
-    # def estimate_map(pi, psi, u, label_set, max_only=False, max_size=None):
-    #     """
-    #     Compute Predictions (most probable, based on MAP) for the latent states given the observations
-    #
-    #     :param pi:          Latent distribution
-    #     :param psi:         Class Conditional Densities
-    #     :param u:           Observations (One-Hot Encoding, size [N by K*|U|])
-    #     :param label_set:   The original label set for the latent states (i.e. actual values associated with each index
-    #                         in the current ordering.
-    #     :param max_only:    If True (default) just return the MAP estimate: otherwise, return the posterior probabilities
-    #     :param max_size:    Must be set if max_only is False (otherwise ignored).
-    #     :return:            Maximum a Posteriori latent state or the posterior probabilities
-    #     """
-    #     # Compute Posterior
-    #     _posterior = np.multiply(np.prod(np.power(psi.T[np.newaxis, :, :], u[:, :, np.newaxis]), axis=1), pi[np.newaxis, :])
-    #
-    #     # Branch on whether to compute MAP or just output probabilities
-    #     if max_only:
-    #         return npext.value_map(np.argmax(_posterior, axis=1), label_set, shuffle=True)   # Map to original Label-Set
-    #     else:
-    #         _posterior = npext.sum_to_one(_posterior, axis=1)        # Normalised Probabilities
-    #         _mapped_post = np.zeros([_posterior.shape[0], max_size]) # Placeholder for mapped posterior (mapped to actual value in label_set)
-    #         for _i, _l in enumerate(label_set):
-    #             _mapped_post[:, _l] = _posterior[:, _i]
-    #         return _mapped_post
-
-    # @staticmethod
     # def optimise_permutations(_map, _raw, _pi, _psi, _labels):
     #     """
     #     Optimise the permutation of the latent states (_map) such that there is least error (confusion matrix, highest
@@ -244,7 +258,7 @@ class DawidSkeneIID(WorkerHandler):
     #     return _pi, _psi, npext.value_map(_map, _best_labels, _labels), _best_permute
 
     # ========================== Private Nested Implementations ========================== #
-    class EMWorker(IWorker):
+    class _EMWorker(IWorker):
         """
         (Private) Nested class for running the EM Algorithm
 
@@ -262,7 +276,7 @@ class DawidSkeneIID(WorkerHandler):
             :param _handler:    The Worker Handler
             """
             # Initialise Super-Class
-            super(DawidSkeneIID.EMWorker, self).__init__(_id, _handler)
+            super(DawidSkeneIID._EMWorker, self).__init__(_id, _handler)
 
         def parallel_compute(self, _common, _data):
             """
@@ -339,7 +353,7 @@ class DawidSkeneIID(WorkerHandler):
             #     psi = np.stack((psi[j] for j in _sort_order), axis=0)
 
             # Return Result
-            return DawidSkeneIID.EMWorker.ComputeResult_t(pi, psi, converged, loglikelihood)
+            return DawidSkeneIID._EMWorker.ComputeResult_t(pi, psi, converged, loglikelihood)
 
         @staticmethod
         def _compute_responsibilities(U, pi, psi):
@@ -353,14 +367,14 @@ class DawidSkeneIID(WorkerHandler):
             """
             # Compute Unnormalised Gamma using JIT
             gamma = np.tile(pi[np.newaxis, :], [len(U), 1])
-            DawidSkeneIID.EMWorker.__gamma(U, pi, psi, gamma)
+            DawidSkeneIID._EMWorker.__gamma(U, pi, psi, gamma)
 
             # Normalise to sum to 1, and at the same, through the normaliser, compute observed log-likelihood
             gamma, normaliser = npext.sum_to_one(gamma, axis=-1, norm=True)
             log_likelihood = -np.log(normaliser).sum()
 
             # Return
-            return DawidSkeneIID.EMWorker.Responsibilities_t(gamma, log_likelihood)
+            return DawidSkeneIID._EMWorker.Responsibilities_t(gamma, log_likelihood)
 
         @staticmethod
         def _converged(likelihoods, tolerance):
@@ -406,6 +420,7 @@ class DawidSkeneIID(WorkerHandler):
         def __update_psi(psi, U, gamma):
             """
             Convenience wrapper for updating Psi using JIT
+
             :param psi:       The initialisation for Psi (typically prior counts): Modified in place
             :param U:         The observations
             :param gamma:     The posterior probabilities

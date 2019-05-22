@@ -1,10 +1,6 @@
 """
-This is the ISAR Model, applied to the Crowd-sourcing task where P(U|Z) is a mixture of categorical distributions
+This is the ISAR Model, applied to the multi-annotator task where P(U|Z) is a mixture of categorical distributions
 according to the Dawid-Skene Model.
-
-TODO: Use JiT Compilation on some of the for-loops
-
-N.B. This code is copied into my M.Sc Project -- If I do any changes, I should also change there.
 """
 from mpctools.parallel import WorkerHandler, IWorker
 from mpctools.extensions import npext
@@ -275,7 +271,7 @@ class AnnotISAR(WorkerHandler):
                                    Times={'Total': self.elapsed('global'), 'Message': self.elapsed('m_omega'),
                                           'EM': self.elapsed('em')}, LLEvolutions=results.LLEvolutions)
 
-    def aggregate_results(self, results):
+    def _aggregate_results(self, results):
         """
         Maximise parameters over runs:
 
