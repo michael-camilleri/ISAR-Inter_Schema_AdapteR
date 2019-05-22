@@ -219,7 +219,7 @@ class AnnotISAR(WorkerHandler):
         :param _starts:  This can be either:
                             * Integer - Number of random starts to perform
                             * List of Starting points (each starting point should be a tuple/list, containing the
-                              starting pi/psi matrices.
+                              starting pi/psi matrices. N.B. These will be modified (so pass a copy if need to preserve)
         :return:    NamedTuple of Type ISACResults
                         * ModelDims: Model Dimensions [|Z|, K, |S|, |X|]
                         * DataDims:  Data Dimensions [N]
