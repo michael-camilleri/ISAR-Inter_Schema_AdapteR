@@ -17,13 +17,13 @@ from isar.models import DawidSkeneIID, InterSchemaAdapteRIID
 
 # Default Parameters
 DEFAULTS = \
-    {'Output': ['../data/Compare_DS', '../data/Compare_ISAR'],  # File-Names
+    {'Output': ['../data/Compare_DS_F1', '../data/Compare_ISAR_F1'],  # File-Names
      'Random': '0',                                             # Random Seed offset
-     'Numbers': ['0', '20'],                                    # Range: start index, number of runs
-     'Lengths': ['500', '100'],                                 # Number and length of segments
+     'Numbers': ['0', '10'],                                    # Range: start index, number of runs
+     'Lengths': ['50', '100'],                                  # Number and length of segments
      'Schemas': ['13', '15', '17', '10'],                       # Probability over Schemas,
      'Pi': 'unif',                                              # Pi mode
-     'Folds': '10'}                                             # Number of Folds to use (folding is by Segment)
+     'Folds': '5'}                                             # Number of Folds to use (folding is by Segment)
 
 # Some Constants
 PDF_ANNOT = npext.sum_to_one([49, 31, 11, 4, 10, 25, 9, 7, 6, 3, 3])  # Probability over Annotators
@@ -96,13 +96,15 @@ if __name__ == '__main__':
     if args.output[DS].lower() != 'none':
         pred_corr_DS = np.zeros([run_length, sS], dtype=float)      # Array for Absolute Accuracy
         pred_wght_DS = np.zeros([run_length, sS], dtype=float)      # Array for Predictive Log Probability
+        pred_f1_DS = np.zeros([run_length, sS+1], dtype=float)      # F1-Score Array - this requires global computation
     else:
-        pred_corr_DS = None; pred_wght_DS = None
+        pred_corr_DS = None; pred_wght_DS = None; pred_f1_DS = None
     if args.output[ISAR].lower() != 'none':
         pred_corr_ISAR = np.zeros([run_length, sS], dtype=float)
         pred_wght_ISAR = np.zeros([run_length, sS], dtype=float)
+        pred_f1_ISAR = np.zeros([run_length, sS+1], dtype=float)
     else:
-        pred_corr_ISAR = None; pred_wght_ISAR = None
+        pred_corr_ISAR = None; pred_wght_ISAR = None; pred_f1_ISAR = None
     run_sizes = np.zeros([run_length, sS], dtype=float)         # Number of Samples per Schema per Run
 
     # --- Iterate over Runs ---- #
@@ -124,6 +126,8 @@ if __name__ == '__main__':
         # [B] - Train ISAR Model
         if args.output[ISAR].lower() != 'none':
             print(' - Training ISAR Model (holistically):')
+            # Prepare some placeholders for the F1-scores
+            z_predictions = np.empty_like(Z)
             for fold in range(sF):  # Iterate over folds
                 print(' ---> Fold {}'.format(fold))
                 # Split Training/Testing Sets

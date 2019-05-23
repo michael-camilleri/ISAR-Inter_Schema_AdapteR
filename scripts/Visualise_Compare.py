@@ -5,7 +5,7 @@ from scipy.stats import ttest_rel
 import numpy as np
 import argparse
 
-DEFAULTS = {'Results': ['../data/Compare_DS.npz', '../data/Compare_ISAR.npz'],
+DEFAULTS = {'Results': ['../data/Compare_DS_F1.npz', '../data/Compare_ISAR_F1.npz'],
             'Schemas': ['I', 'II', 'III', 'IV']}
 
 if __name__ == '__main__':
@@ -42,7 +42,7 @@ if __name__ == '__main__':
               .format(args.schemas[s], acc_ds_schema[:, s].mean()*100, acc_ds_schema[:, s].std()*100,
                       acc_isar_schema[:, s].mean()*100, acc_isar_schema[:, s].std()*100,
                       *ttest_rel(acc_ds_schema[:, s], acc_isar_schema[:, s])))
-    # [B] - Now do global
+    # [B] - Now do global: here have to take into consideration the number of runs in each schema for a balanced mean!
     acc_ds_global = np.divide(accuracy_ds.sum(axis=1), sizes_all.sum(axis=1))
     acc_isar_global = np.divide(accuracy_isar.sum(axis=1), sizes_all.sum(axis=1))
     print('--------------------------------------------------------------------------')

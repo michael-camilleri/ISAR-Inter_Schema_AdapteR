@@ -402,9 +402,9 @@ class InterSchemaAdapteRIID(WorkerHandler):
 
                 # -------------- M-Step: -------------- #
                 # Now Compute Pi
-                pi = npext.sum_to_one(np.sum(msg.gamma, axis=0).squeeze() + _common.prior_pi, axis=-1)
+                pi = npext.sum_to_one(np.sum(msg.gamma, axis=0).squeeze() + (_common.prior_pi - 1), axis=-1)
                 # Finally Compute Psi
-                psi = npext.sum_to_one(msg.rho_sum + _common.prior_psi, axis=-1)
+                psi = npext.sum_to_one(msg.rho_sum + (_common.prior_psi - 1), axis=-1)
 
                 # -------------- Iteration Control -------------- #
                 iterations += 1
