@@ -19,7 +19,7 @@ class DawidSkeneIID(WorkerHandler):
     DSIIDResult_t = namedtuple('DSIIDResult_t', ['Pi', 'Psi', 'Converged', 'Best', 'LLEvolutions'])
 
     # ========================== Initialisers ========================== #
-    def __init__(self, dims, params, max_iter=100, tol=1e-4, n_jobs=-1, random_state=None, sink=None):
+    def __init__(self, dims, params=None, max_iter=100, tol=1e-4, n_jobs=-1, random_state=None, sink=None):
         """
         Initialiser
 
@@ -75,6 +75,7 @@ class DawidSkeneIID(WorkerHandler):
         """
         # Branch based on whether we are doing this in a supervised or unsupervised fashion.
         if z is not None:
+            # --- Indicate branch --- #
             self._print('Fitting DS Model in a supervised fashion.')
 
             # --- Handle Prior Smoothing --- #
@@ -102,7 +103,7 @@ class DawidSkeneIID(WorkerHandler):
             return self
 
         else:
-            # --- Initialise some stuff --- #
+            # --- Indicate branch --- #
             self._print('Fitting DS Model using Expectation Maximisation')
 
             # --- Handle Priors first --- #
@@ -346,12 +347,6 @@ class DawidSkeneIID(WorkerHandler):
             self.update_progress(100.0)
             converged = self._converged(loglikelihood, _common.tolerance)
 
-            # # Optionally, sort the parameters in ascending probability for pi
-            # if _common.sort:
-            #     _sort_order = np.argsort(pi)
-            #     pi = pi[_sort_order]
-            #     psi = np.stack((psi[j] for j in _sort_order), axis=0)
-
             # Return Result
             return DawidSkeneIID._EMWorker.ComputeResult_t(pi, psi, converged, loglikelihood)
 
@@ -402,7 +397,7 @@ class DawidSkeneIID(WorkerHandler):
             :param U:       The Data, with Unlabelled/Missing data indicated by np.NaN
             :param pi:      The Prior Probabilities
             :param psi:     The Emission Probabilities
-            :param gamma:   The gamma placeholder (modified in place)
+            :param gamma:   The gamma placeholder (modified in place). Note that these are unnormalised!
             :return         None: the gamma is modified in place.
             """
             sN, sK = U.shape

@@ -13,7 +13,7 @@ import sys
 
 # Load own packages
 sys.path.append('..')
-from isar.models import DawidSkeneIID, AnnotISAR
+from isar.models import DawidSkeneIID, InterSchemaAdapteRIID
 
 # Default Parameters
 DEFAULTS = \
@@ -110,29 +110,50 @@ if __name__ == '__main__':
         print('Executing Simulation Run: {} ...'.format(run))
 
         # Seed with Random Offset + run value
-        np.random.seed(args.random + run)
+        np.random.seed()
 
         # [A] - Generate Data
         print(' - Generating Data:')
-        Z = np.random.choice(sZ, size=sN*sT, p=pi)                                          # Latent State
-        S = np.repeat(np.random.choice(sS, size=sN, p=pdf_schema), sT)                      # Schema
-        F = np.repeat([next(iterator) for _ in range(sN)], sT)                              # Folds: sequentially
-        # With regards to the observations, have to do on a sample-by-sample basis.
-        Y = np.full([sN * sT, sK], fill_value=np.NaN)   # Observations Matrix
-        A = np.empty([sN * sT, nA], dtype=int)          # Annotator Selection Matrix
-        for n in range(sN):  # Iterate over all segments
-            A[n*sT:(n+1)*sT, :] = np.random.choice(sK, size=nA, replace=False, p=PDF_ANNOT)  # Annotators
-            for nt in range(n*sT, (n+1)*sT):    # Iterate over time-instances in this Segment
-                for k in A[nt]:    # Iterate over Annotators chosen in this time-instant
-                    u_k = np.random.choice(sU, p=psi[Z[nt], k, :])  # Compute Annotator Emission (confusion)
-                    if omega[S[nt], u_k, u_k] == 1: Y[nt, k] = u_k  # Project Observation (if in schema)
+        sampler = InterSchemaAdapteRIID([sZ, sK, sS], omega, params=(pi, psi), random_state=args.random + run)
+        Z, S, A, Y = sampler.sample(sN, sT, nA, pdf_schema, PDF_ANNOT)
+        F = np.repeat([next(iterator) for _ in range(sN)], sT)  # Folds: sequentially
         # Now store sizes
         for s in range(sS):
             run_sizes[run, s] = np.equal(S, s).sum()
 
-        # [B] - Train DS Model Holistically
+        # [B] - Train ISAR Model
+        if args.output[ISAR].lower() != 'none':
+            print(' - Training ISAR Model (holistically):')
+            for fold in range(sF):  # Iterate over folds
+                print(' ---> Fold {}'.format(fold))
+                # Split Training/Testing Sets
+                train_idcs = np.not_equal(F, fold)
+                valid_idcs = np.equal(F, fold)
+                priors = [np.ones(sZ) * 2, np.ones([sZ, sK, sU]) * 2]
+                starts = [(npext.sum_to_one(np.ones(sZ)),
+                           np.tile(npext.sum_to_one(np.eye(sZ, sU) + np.full([sZ, sU], fill_value=0.01), axis=1)[:, np.newaxis, :], [1, sK, 1]))]
+                # Train Model
+                Y_train = Y[train_idcs]
+                Y_valid = Y[valid_idcs]
+                S_train = S[train_idcs]
+                S_valid = S[valid_idcs]
+                Z_valid = Z[valid_idcs]
+                isar_model = InterSchemaAdapteRIID([sZ, sK, sS], omega, random_state=args.random + run, sink=sys.stdout)
+                results = isar_model.fit(Y_train, S_train, priors, starts)
+                # Validate Model
+                z_posterior = isar_model.predict_proba(Y_valid, S_valid)
+                z_predict = np.argmax(z_posterior, axis=-1)
+                z_log_correct_post = z_posterior[np.arange(len(Z_valid)), Z_valid]
+                for s in range(sS):
+                    schema_idcs = np.equal(S_valid, s)
+                    pred_corr_ISAR[run, s] += np.equal(z_predict[schema_idcs], Z_valid[schema_idcs]).sum()
+                    pred_wght_ISAR[run, s] += np.log(z_log_correct_post[schema_idcs]).sum()
+
+        # [C] - Train DS Model Holistically
         if args.output[DS].lower() != 'none':
             print(' - Training DS Model (Holistically):')
+            # First need to convert NIS to NaN
+            Y[Y == sZ] = np.NaN
             for fold in range(sF):  # Iterate over folds
                 print(' ---> Fold {}'.format(fold))
                 # Split Training/Testing Sets and get the relevant subsets
@@ -146,7 +167,7 @@ if __name__ == '__main__':
                 priors = [np.ones(sZ)*2, np.ones([sZ, sK, sU])*2]   # Prior Probabilities (actual alphas)
                 starts = [(npext.sum_to_one(np.ones(sZ)),           # Starting Probabilities
                            np.tile(npext.sum_to_one(np.eye(sZ, sU) + np.full([sZ, sU], fill_value=0.01), axis=1)[:, np.newaxis, :], [1, sK, 1]))]
-                ds_model = DawidSkeneIID([sZ, sK], None, random_state=args.random, sink=sys.stdout)
+                ds_model = DawidSkeneIID([sZ, sK], None, random_state=args.random + run, sink=sys.stdout)
                 ds_model.fit(U_train, None, priors, starts)
                 # Validate Model
                 z_predict = ds_model.predict(U_valid)
@@ -155,37 +176,6 @@ if __name__ == '__main__':
                     schema_idcs = np.equal(S_valid, s)
                     pred_corr_DS[run, s] += np.equal(z_predict[schema_idcs], Z_valid[schema_idcs]).sum()
                     pred_wght_DS[run, s] += np.log(z_log_correct_post[schema_idcs]).sum()
-
-        # [C] - Train ISAR Model - but first, we have to identify NIS (i.e. when the responsible annotators do not
-        #       provide a label.
-        if args.output[ISAR].lower() != 'none':
-            print(' - Training ISAR Model (holistically):')
-            for nt in range(sN*sT):
-                for a in A[nt, :]:
-                    if np.isnan(Y[nt, a]): Y[nt, a] = NIS  # We are putting all as NIS
-            for fold in range(sF):  # Iterate over folds
-                print(' ---> Fold {}'.format(fold))
-                # Split Training/Testing Sets
-                train_idcs = np.not_equal(F, fold)
-                valid_idcs = np.equal(F, fold)
-                priors = [np.ones(sZ), np.ones([sZ, sK, sU])]
-                starts = [(npext.sum_to_one(np.ones(sZ)),
-                           np.stack([npext.sum_to_one(np.eye(sZ, sU) + np.full([sZ, sU], fill_value=0.01), axis=1)
-                                    for _ in range(sK)]).swapaxes(0, 1))]
-                # Train Model
-                isar_model = AnnotISAR(omega, -1, 100, sink=sys.stdout)
-                results = isar_model.fit_model(Y[train_idcs], S[train_idcs], priors, starts)
-                # Validate Model
-                Z_valid = Z[valid_idcs]
-                S_valid = S[valid_idcs]
-                m_omega = AnnotISAR.omega_msg(omega, Y[valid_idcs], S_valid)
-                map_pred = isar_model.estimate_map(results.Pi, results.Psi, m_omega, None)
-                predictions = np.argmax(map_pred, axis=1)
-                pred_likels = map_pred[np.arange(len(map_pred)), Z_valid]
-                for s in range(sS):
-                    schema_idcs = np.equal(S_valid, s)
-                    pred_corr_ISAR[run, s] += np.equal(predictions[schema_idcs], Z_valid[schema_idcs]).sum()
-                    pred_wght_ISAR[run, s] += np.log(pred_likels[schema_idcs]).sum()
 
     # ===== Finally store the results to File: ===== #
     print('Storing Results to file ... ')

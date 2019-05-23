@@ -16,7 +16,7 @@ import sys
 
 # Load own packages
 sys.path.append('..')
-from isar.models import AnnotISAR
+from isar.models import InterSchemaAdapteRIID
 
 # Default Parameters
 DEFAULTS = {'Output':  '../../data/Parameters_ISAR',      # Result File
@@ -187,7 +187,7 @@ if __name__ == '__main__':
                        np.stack([npext.sum_to_one(np.eye(sZ, sZ) + np.full([sZ, sZ], fill_value=0.01), axis=1)
                                  for _ in range(sK)]).swapaxes(0, 1))]
             # Train ISAR Model
-            isar_model = AnnotISAR(omega, -1, 200, sink=sys.stdout)
+            isar_model = InterSchemaAdapteRIID(omega, -1, 200, sink=sys.stdout)
             results = isar_model.fit_model(y_i, s_i, priors, starts)
             # Store results
             pi_isar[run, i, :] = results.Pi
