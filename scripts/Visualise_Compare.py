@@ -5,7 +5,7 @@ from scipy.stats import ttest_rel
 import numpy as np
 import argparse
 
-DEFAULTS = {'Results': ['../data/Compare_DS_F1.npz', '../data/Compare_ISAR_F1.npz'],
+DEFAULTS = {'Results': ['../data/Compare_DS.npz', '../data/Compare_ISAR.npz'],
             'Schemas': ['I', 'II', 'III', 'IV']}
 
 if __name__ == '__main__':
@@ -22,11 +22,12 @@ if __name__ == '__main__':
     # ==== Load the Data: ==== #
     with np.load(args.results[0]) as res_ds:
         accuracy_ds = res_ds['accuracy']
-        log_loss_ds = res_ds['log_loss']
-        sizes_all = res_ds['sizes']
+        log_loss_ds = -res_ds['log_loss']
+        f1_score_ds = res_ds['f1']
     with np.load(args.results[1]) as res_isar:
         accuracy_isar = res_isar['accuracy']
-        log_loss_isar = res_isar['log_loss']
+        log_loss_isar = -res_isar['log_loss']
+        f1_score_isar = res_isar['f1']
 
     # ==== Now Print: ==== #
     np.set_printoptions(linewidth=120)
@@ -35,37 +36,43 @@ if __name__ == '__main__':
     # ---- Accuracy First ---- #
     print('=============================== Accuracy ================================')
     # [A] - Per-Schema Accuracies
-    acc_ds_schema = np.divide(accuracy_ds, sizes_all)
-    acc_isar_schema = np.divide(accuracy_isar, sizes_all)
     for s in range(len(args.schemas)):
         print(' Schema {:3} | {:.1f}% +/- {:4.2f}% | {:.1f}% +/- {:.2f}% | t={:8.2f}, p={:.2e}'
-              .format(args.schemas[s], acc_ds_schema[:, s].mean()*100, acc_ds_schema[:, s].std()*100,
-                      acc_isar_schema[:, s].mean()*100, acc_isar_schema[:, s].std()*100,
-                      *ttest_rel(acc_ds_schema[:, s], acc_isar_schema[:, s])))
-    # [B] - Now do global: here have to take into consideration the number of runs in each schema for a balanced mean!
-    acc_ds_global = np.divide(accuracy_ds.sum(axis=1), sizes_all.sum(axis=1))
-    acc_isar_global = np.divide(accuracy_isar.sum(axis=1), sizes_all.sum(axis=1))
+              .format(args.schemas[s], accuracy_ds[:, s].mean()*100, accuracy_ds[:, s].std()*100,
+                      accuracy_isar[:, s].mean()*100, accuracy_isar[:, s].std()*100,
+                      *ttest_rel(accuracy_ds[:, s], accuracy_isar[:, s])))
+    # [B] - Now do global
     print('--------------------------------------------------------------------------')
     print(' Global     | {:.1f}% +/- {:.2f}% | {:.1f}% +/- {:.2f}% | t={:8.2f}, p={:.2e}'
-          .format(acc_ds_global.mean()*100, acc_ds_global.std()*100, acc_isar_global.mean()*100,
-                  acc_isar_global.std()*100, *ttest_rel(acc_ds_global, acc_isar_global)))
+          .format(accuracy_ds[:, -1].mean()*100, accuracy_ds[:, -1].std()*100, accuracy_isar[:, -1].mean()*100,
+                  accuracy_isar[:, -1].std()*100, *ttest_rel(accuracy_ds[:, -1], accuracy_isar[:, -1])))
     print('--------------------------------------------------------------------------')
 
     # ---- Next Log Loss ---- #
     print('======================= Predictive Log-Likelihood ========================')
     # [A] - Per-Schema PLL
-    pll_ds_schema = np.divide(-log_loss_ds, sizes_all)
-    pll_isar_schema = np.divide(-log_loss_isar, sizes_all)
     for s in range(len(args.schemas)):
         print(' Schema {:3} | {:6.2f} +/- {:4.2f} | {:.2f} +/- {:.2f}  | t={:8.2f}, p={:.2e}'
-              .format(args.schemas[s], pll_ds_schema[:, s].mean(), pll_ds_schema[:, s].std(),
-                      pll_isar_schema[:, s].mean(), pll_isar_schema[:, s].std(),
-                      *ttest_rel(pll_ds_schema[:, s], pll_isar_schema[:, s])))
+              .format(args.schemas[s], log_loss_ds[:, s].mean(), log_loss_ds[:, s].std(),
+                      log_loss_isar[:, s].mean(), log_loss_isar[:, s].std(),
+                      *ttest_rel(log_loss_ds[:, s], log_loss_isar[:, s])))
     # [B] - Now do global
-    pll_ds_global = np.divide(-log_loss_ds.sum(axis=1), sizes_all.sum(axis=1))
-    pll_isar_global = np.divide(-log_loss_isar.sum(axis=1), sizes_all.sum(axis=1))
     print('--------------------------------------------------------------------------')
     print(' Global     |  {:.2f} +/- {:.2f} | {:5.2f} +/- {:4.2f}  | t={:8.2f}, p={:.2e} '
-          .format(pll_ds_global.mean(), pll_ds_global.std(), pll_isar_global.mean(), pll_isar_global.std(),
-                  *ttest_rel(pll_ds_global, pll_isar_global)))
+          .format(log_loss_ds[:, -1].mean(), log_loss_ds[:, -1].std(), log_loss_isar[:, -1].mean(),
+                  log_loss_isar[:, -1].std(), *ttest_rel(log_loss_ds[:, -1], log_loss_isar[:, -1])))
+    print('--------------------------------------------------------------------------')
+
+    # ---- Finally F1-Score ---- #
+    print('=============================== F1-Score ================================')
+    # [A] - Per-Schema F1
+    for s in range(len(args.schemas)):
+        print(' Schema {:3} | {:.3f} +/- {:4.3f} | {:.3f} +/- {:.3f} | t={:8.2f}, p={:.2e}'
+              .format(args.schemas[s], f1_score_ds[:, s].mean(), f1_score_ds[:, s].std(), f1_score_isar[:, s].mean(),
+                      f1_score_isar[:, s].std(), *ttest_rel(f1_score_ds[:, s], f1_score_isar[:, s])))
+    # [B] - Now do global
+    print('--------------------------------------------------------------------------')
+    print(' Global     | {:.3f} +/- {:.3f} | {:.3f} +/- {:.3f} | t={:8.2f}, p={:.2e}'
+          .format(f1_score_ds[:, -1].mean(), f1_score_ds[:, -1].std(), f1_score_isar[:, -1].mean(),
+                  f1_score_isar[:, -1].std(), *ttest_rel(f1_score_ds[:, -1], f1_score_isar[:, -1])))
     print('--------------------------------------------------------------------------')

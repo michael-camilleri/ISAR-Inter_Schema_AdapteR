@@ -4,7 +4,12 @@ conditions.
 
 The Simulation process does not generate any Missing-At-Random data, and hence, in this case, all Samples where the
 assigned annotator does not provide a label, are interpreted as NIS.
+
+We report three scores:
+ * Accuracy: simplest metric
+ * Macro-F1: to avoid label imbalance (basically all important)
 """
+from sklearn.metrics import accuracy_score, f1_score
 from mpctools.extensions import npext
 from itertools import cycle
 import numpy as np
@@ -92,19 +97,20 @@ if __name__ == '__main__':
 
     # ==== Simulate (and Learn) Model(s) ==== #
     # ---- Prepare Placeholders ---- #
-    # Note that we use the same array for both: DS appears in the first, and ISAR in the second position
+    # Note that we use the same array for both: DS appears in the first, and ISAR in the second position. Also, we
+    #  compute both per-schema and global scores (after doing all folds)!
     if args.output[DS].lower() != 'none':
-        pred_corr_DS = np.zeros([run_length, sS], dtype=float)      # Array for Absolute Accuracy
-        pred_wght_DS = np.zeros([run_length, sS], dtype=float)      # Array for Predictive Log Probability
-        pred_f1_DS = np.zeros([run_length, sS+1], dtype=float)      # F1-Score Array - this requires global computation
+        pred_acc_DS = np.zeros([run_length, sS + 1], dtype=float)     # Array for Absolute Accuracy
+        pred_wght_DS = np.zeros([run_length, sS + 1], dtype=float)    # Array for Predictive Log Probability
+        pred_f1_DS = np.zeros([run_length, sS + 1], dtype=float)      # F1-Score Array
     else:
-        pred_corr_DS = None; pred_wght_DS = None; pred_f1_DS = None
+        pred_acc_DS = None; pred_wght_DS = None; pred_f1_DS = None
     if args.output[ISAR].lower() != 'none':
-        pred_corr_ISAR = np.zeros([run_length, sS], dtype=float)
-        pred_wght_ISAR = np.zeros([run_length, sS], dtype=float)
-        pred_f1_ISAR = np.zeros([run_length, sS+1], dtype=float)
+        pred_acc_ISAR = np.zeros([run_length, sS + 1], dtype=float)
+        pred_wght_ISAR = np.zeros([run_length, sS + 1], dtype=float)
+        pred_f1_ISAR = np.zeros([run_length, sS + 1], dtype=float)
     else:
-        pred_corr_ISAR = None; pred_wght_ISAR = None; pred_f1_ISAR = None
+        pred_acc_ISAR = None; pred_wght_ISAR = None; pred_f1_ISAR = None
     run_sizes = np.zeros([run_length, sS], dtype=float)         # Number of Samples per Schema per Run
 
     # --- Iterate over Runs ---- #
@@ -126,8 +132,9 @@ if __name__ == '__main__':
         # [B] - Train ISAR Model
         if args.output[ISAR].lower() != 'none':
             print(' - Training ISAR Model (holistically):')
-            # Prepare some placeholders for the F1-scores
+            # Prepare some placeholders for the scores
             z_predictions = np.empty_like(Z)
+            z_log_cposter = np.empty_like(Z, dtype=float)
             for fold in range(sF):  # Iterate over folds
                 print(' ---> Fold {}'.format(fold))
                 # Split Training/Testing Sets
@@ -146,18 +153,27 @@ if __name__ == '__main__':
                 results = isar_model.fit(Y_train, S_train, priors, starts)
                 # Validate Model
                 z_posterior = isar_model.predict_proba(Y_valid, S_valid)
-                z_predict = np.argmax(z_posterior, axis=-1)
-                z_log_correct_post = z_posterior[np.arange(len(Z_valid)), Z_valid]
-                for s in range(sS):
-                    schema_idcs = np.equal(S_valid, s)
-                    pred_corr_ISAR[run, s] += np.equal(z_predict[schema_idcs], Z_valid[schema_idcs]).sum()
-                    pred_wght_ISAR[run, s] += np.log(z_log_correct_post[schema_idcs]).sum()
+                z_predictions[valid_idcs] = np.argmax(z_posterior, axis=-1)
+                z_log_cposter[valid_idcs] = z_posterior[np.arange(len(Z_valid)), Z_valid]
+            # Now Store Values
+            for s in range(sS):
+                schema_idcs = np.equal(S, s)
+                pred_acc_ISAR[run, s] = accuracy_score(Z[schema_idcs], z_predictions[schema_idcs])
+                pred_wght_ISAR[run, s] = np.log(z_log_cposter[schema_idcs]).mean()
+                pred_f1_ISAR[run, s] = f1_score(Z[schema_idcs], z_predictions[schema_idcs], labels=np.arange(sZ), average='macro')
+            # And Globals
+            pred_acc_ISAR[run, -1] = accuracy_score(Z, z_predictions)
+            pred_wght_ISAR[run, -1] = np.log(z_log_cposter).mean()
+            pred_f1_ISAR[run, -1] = f1_score(Z, z_predictions, labels=np.arange(sZ), average='macro')
 
         # [C] - Train DS Model Holistically
         if args.output[DS].lower() != 'none':
             print(' - Training DS Model (Holistically):')
             # First need to convert NIS to NaN
             Y[Y == sZ] = np.NaN
+            # Prepare some placeholders for the scores
+            z_predictions = np.empty_like(Z)
+            z_log_cposter = np.empty_like(Z, dtype=float)
             for fold in range(sF):  # Iterate over folds
                 print(' ---> Fold {}'.format(fold))
                 # Split Training/Testing Sets and get the relevant subsets
@@ -174,16 +190,24 @@ if __name__ == '__main__':
                 ds_model = DawidSkeneIID([sZ, sK], None, random_state=args.random + run, sink=sys.stdout)
                 ds_model.fit(U_train, None, priors, starts)
                 # Validate Model
-                z_predict = ds_model.predict(U_valid)
-                z_log_correct_post = ds_model.predict_proba(U_valid)[np.arange(len(Z_valid)), Z_valid]
-                for s in range(sS):
-                    schema_idcs = np.equal(S_valid, s)
-                    pred_corr_DS[run, s] += np.equal(z_predict[schema_idcs], Z_valid[schema_idcs]).sum()
-                    pred_wght_DS[run, s] += np.log(z_log_correct_post[schema_idcs]).sum()
+                z_posterior = ds_model.predict_proba(U_valid)
+                z_predictions[valid_idcs] = np.argmax(z_posterior, axis=-1)
+                z_log_cposter[valid_idcs] = z_posterior[np.arange(len(Z_valid)), Z_valid]
+            # Now Store Values
+            for s in range(sS):
+                schema_idcs = np.equal(S, s)
+                pred_acc_DS[run, s] = accuracy_score(Z[schema_idcs], z_predictions[schema_idcs])
+                pred_wght_DS[run, s] = np.log(z_log_cposter[schema_idcs]).mean()
+                pred_f1_DS[run, s] = f1_score(Z[schema_idcs], z_predictions[schema_idcs], labels=np.arange(sZ),
+                                                average='macro')
+            # And Globals
+            pred_acc_DS[run, -1] = accuracy_score(Z, z_predictions)
+            pred_wght_DS[run, -1] = np.log(z_log_cposter).mean()
+            pred_f1_DS[run, -1] = f1_score(Z, z_predictions, labels=np.arange(sZ), average='macro')
 
     # ===== Finally store the results to File: ===== #
     print('Storing Results to file ... ')
     if args.output[DS].lower() != 'none':
-        np.savez_compressed(args.output[DS], accuracy=pred_corr_DS, log_loss=-pred_wght_DS, sizes=run_sizes)
+        np.savez_compressed(args.output[DS], accuracy=pred_acc_DS, f1=pred_f1_DS, log_loss=-pred_wght_DS)
     if args.output[ISAR].lower() != 'none':
-        np.savez_compressed(args.output[ISAR], accuracy=pred_corr_ISAR, log_loss=-pred_wght_ISAR, sizes=run_sizes)
+        np.savez_compressed(args.output[ISAR], accuracy=pred_acc_ISAR, f1=pred_f1_ISAR, log_loss=-pred_wght_ISAR)
