@@ -20,15 +20,20 @@ import sys
 sys.path.append('..')
 from isar.models import DawidSkeneIID, InterSchemaAdapteRIID
 
+# 1 - Reduced
+# 2 - Uniform
+# 3 - Dirich (10)
+# 4 - Biased  (True)
+# 5 - Biased (Unif)
 # Default Parameters
 DEFAULTS = \
-    {'Output': ['../data/Compare_DS_F1', '../data/Compare_ISAR_F1'],  # File-Names
-     'Random': '0',                                             # Random Seed offset
-     'Numbers': ['0', '10'],                                    # Range: start index, number of runs
-     'Lengths': ['50', '100'],                                  # Number and length of segments
-     'Schemas': ['13', '15', '17', '10'],                       # Probability over Schemas,
-     'Pi': 'unif',                                              # Pi mode
-     'Folds': '5'}                                             # Number of Folds to use (folding is by Segment)
+    {'Output': ['../data/Compare_DS', '../data/Compare_ISAR'],    # File-Names
+     'Random': '0',                                               # Random Seed offset
+     'Numbers': ['0', '20'],                                      # Range: start index, number of runs
+     'Lengths': ['60', '5400'],                                   # Number and length of segments
+     'Schemas': ['13', '15', '17', '10'],                         # Probability over Schemas,
+     'Pi': 'true',                                                # Pi mode
+     'Folds': '10'}                                               # Number of Folds to use (folding is by Segment)
 
 # Some Constants
 PDF_ANNOT = npext.sum_to_one([49, 31, 11, 4, 10, 25, 9, 7, 6, 3, 3])  # Probability over Annotators
@@ -150,7 +155,7 @@ if __name__ == '__main__':
                 S_valid = S[valid_idcs]
                 Z_valid = Z[valid_idcs]
                 isar_model = InterSchemaAdapteRIID([sZ, sK, sS], omega, random_state=args.random + run, sink=sys.stdout)
-                results = isar_model.fit(Y_train, S_train, priors, starts)
+                isar_model.fit(Y_train, S_train, priors, starts)
                 # Validate Model
                 z_posterior = isar_model.predict_proba(Y_valid, S_valid)
                 z_predictions[valid_idcs] = np.argmax(z_posterior, axis=-1)

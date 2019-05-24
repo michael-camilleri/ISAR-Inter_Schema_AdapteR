@@ -52,7 +52,7 @@ class InterSchemaAdapteRIID(WorkerHandler):
         self.Omega = omega
         if params is None:
             self.Pi = np.full(self.sZU, 1 / self.sZU)
-            self.Psi = np.tile(np.eye(self.sZU)[np.newaxis, :, :], [self.sK, 1, 1])
+            self.Psi = np.tile(np.eye(self.sZU)[:, np.newaxis, :], [1, self.sK, 1])
         else:
             self.Pi, self.Psi = params
 
