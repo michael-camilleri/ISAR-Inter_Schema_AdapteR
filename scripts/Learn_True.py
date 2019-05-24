@@ -40,7 +40,7 @@ DS, ISAR = (0, 1)   # Position (index) into arrays
 # User Settings
 DEFAULTS = \
     {'Input': '../data/mrc_data.df',                        # File-Name containing the Data (Pandas DataFrame)
-     'Output': ['../data/Learn_DS', 'none'],  # Output file Names. '../data/Learn_ISAR'
+     'Output': ['../data/Learn_DS', 'none'],  # Output file Names. ../data/Learn_ISAR
      'Random': '0'}                                         # Random Seed
 
 
@@ -63,7 +63,7 @@ if __name__ == '__main__':
     # ==== Read and Prepare the DataSet/Values ==== #
     print('Loading Data...')
     df = pd.read_msgpack(args.inputs)[['Schema', 'Segment', *ANNOTATORS]]
-    segments = df['Segment'].unique().tolist()
+    segments = sorted(df['Segment'].unique().tolist())
     folds = set(df.index.get_level_values(0))
     with np.load('../data/model.mrc.npz') as _data:
         omega = _data['omega']
@@ -73,10 +73,9 @@ if __name__ == '__main__':
     # ---- Prepare Placeholders ---- #
     ell_ds = np.full([len(segments), sS], fill_value=np.NaN) if args.output[DS].lower() != 'none' else None
     ell_isar = np.full([len(segments), sS], fill_value=np.NaN) if args.output[ISAR].lower() != 'none' else None
-    seg_length = np.empty(len(segments))
 
     # ---- Iterate through Folds ---- #
-    for fold_idx, fold_value in enumerate(folds):
+    for fold_idx, fold_value in enumerate(sorted(folds)):
         print('---------- Training on Fold Index {} ----------'.format(fold_idx))
 
         # ++++ Prepare which folds we will be training on ++++ #
@@ -84,10 +83,6 @@ if __name__ == '__main__':
         valid_folds = fold_value
         train_data = pdext.dfmultiindex(df, lvl=0, vals=train_folds)
         valid_data = pdext.dfmultiindex(df, lvl=0, vals=valid_folds)
-
-        # ++++ Compute and store segment lengths ++++ #
-        for seg_name, seg_data in df.groupby(['Segment']):
-            seg_length[segments.index(seg_name)] = len(seg_data)
 
         # ++++ Train ISAR Model (Holistically) ++++ #
         if args.output[ISAR].lower() != 'none':
@@ -112,7 +107,7 @@ if __name__ == '__main__':
                 seg_idx = segments.index(seg_name)                  # Get the Segment Value (numeric)
                 Y_valid = seg_data[ANNOTATORS].astype(float).values         # Get the Y-values
                 S_valid = seg_data['Schema'].cat.codes.values.astype(int)   # Get the Schemas
-                ell_isar[seg_idx, sch_idx] = isar_model.evidence_log_likelihood(Y_valid, S_valid)
+                ell_isar[seg_idx, sch_idx] = isar_model.evidence_log_likelihood(Y_valid, S_valid)/sN
 
         # ++++ Train DS Model (on a Per-Schema Basis) ++++ #
         if args.output[DS].lower() != 'none':
@@ -125,7 +120,7 @@ if __name__ == '__main__':
                 # [A] - Extract Training Data: we need to recategorise and map
                 train_schema = train_data[train_data['Schema'] == schema].copy()
                 pdext.recategorise(train_schema, CDType(np.arange(len(sch_map))), ANNOTATORS, _map=sch_map)
-                U_train = train_schema[ANNOTATORS].values.astype(float)
+                U_train = train_schema[ANNOTATORS].astype(float).values
                 sZU = len(SCHEMA_VALUES[sch_idx])
                 priors = [np.ones(sZU) * 2, np.ones([sZU, sK, sZU]) * 2]
                 starts = [(npext.sum_to_one(np.ones(sZU)),
@@ -141,12 +136,12 @@ if __name__ == '__main__':
                 for seg_name, seg_data in valid_schema.groupby(['Segment']):
                     sN = len(seg_data)
                     seg_idx = segments.index(seg_name)  # Get the Segment Value (numeric)
-                    U_valid = valid_schema[ANNOTATORS].values.astype(float)
-                    ell_ds[seg_idx, sch_idx] = ds_model.evidence_log_likelihood(U_valid)
+                    U_valid = seg_data[ANNOTATORS].astype(float).values
+                    ell_ds[seg_idx, sch_idx] = ds_model.evidence_log_likelihood(U_valid)/sN
 
     # ===== Finally store the results to File: ===== #
     print('Storing Results to file ... ')
     if args.output[DS].lower() != 'none':
-        np.savez_compressed(args.output[DS], ell=ell_ds, segments=seg_length)
+        np.savez_compressed(args.output[DS], ell=ell_ds)
     if args.output[ISAR].lower() != 'none':
-        np.savez_compressed(args.output[ISAR], ell=ell_isar, segments=seg_length)
+        np.savez_compressed(args.output[ISAR], ell=ell_isar)
