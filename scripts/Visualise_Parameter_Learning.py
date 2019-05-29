@@ -73,7 +73,7 @@ if __name__ == '__main__':
     plt.tick_params(axis='both', which='major', labelsize=20)
     plt.grid(True, which='major', axis='both')
     plt.xscale('log')
-    plt.ylim([0, 140])  # Set to 130 for ISAR_003 to get exact scale as in paper
+    plt.ylim([0, 140])  # Set to 130 for Fig. 5
     plt.tight_layout(pad=0.2)
     # --- Will Plot Individually If requested --- #
     if args.independent:
@@ -86,7 +86,7 @@ if __name__ == '__main__':
         # [B] - Improve Plot
         plt.legend(fontsize=20)
         plt.xlabel('Number of samples used for training', fontsize=20)
-        plt.ylabel('RAD', fontsize=20)
+        plt.ylabel('% RAD', fontsize=20)
         plt.tick_params(axis='both', which='major', labelsize=20)
         plt.grid(True, which='major', axis='both')
         plt.xscale('log')
