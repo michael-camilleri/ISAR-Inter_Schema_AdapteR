@@ -98,7 +98,9 @@ class DawidSkeneIID(WorkerHandler):
             for k in range(self.sK):
                 # Mask against NaN
                 valid_u = ~np.isnan(U[:, k])
-                self.Psi[:, k, :] += confusion_matrix(z[valid_u], U[valid_u, k], labels=np.arange(len(self.Pi)))
+                if np.any(valid_u):
+                    self.Psi[:, k, :] += confusion_matrix(z[valid_u], U[valid_u, k], labels=np.arange(len(self.Pi)))
+                # Otherwise, will just retain prior
             self.Psi = npext.sum_to_one(self.Psi, axis=-1)
 
             # --- Return Self (chaining) --- #

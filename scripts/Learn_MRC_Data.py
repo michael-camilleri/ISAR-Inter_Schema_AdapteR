@@ -40,7 +40,7 @@ DS, ISAR = (0, 1)   # Position (index) into arrays
 # User Settings
 DEFAULTS = \
     {'Input': '../data/mrc_data.df',                        # File-Name containing the Data (Pandas DataFrame)
-     'Output': ['../data/Learn_DS', 'none'],  # Output file Names. ../data/Learn_ISAR
+     'Output': ['../data/Learn_DS', '../data/Learn_ISAR'],  # Output file Names.
      'Random': '0'}                                         # Random Seed
 
 

@@ -152,7 +152,7 @@ if __name__ == '__main__':
             u_i = U[:sizes[run, i], :]
             idcs, cnts = np.unique(z_i, return_counts=True)
 
-            supervised = DawidSkeneIID((sZ, sK)).fit(u_i, z_i)
+            supervised = DawidSkeneIID((sZ, sK)).fit(u_i, z_i, priors=[np.ones(sZ)*2, np.ones([sZ, sK, sU])*2])
             pi_full[run, i, :] = supervised.Pi
             psi_full[run, i, :, :, :] = supervised.Psi
 
