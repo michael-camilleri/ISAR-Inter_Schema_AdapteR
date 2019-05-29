@@ -56,7 +56,7 @@ class InterSchemaAdapteRIID(WorkerHandler):
         else:
             self.Pi, self.Psi = params
 
-    def sample(self, n_runs, n_times, nA, pS, pA):
+    def sample(self, n_runs, n_times, nA, pS, pA, same_schema_per_annotator=True, return_U=False):
         """
         Generate Samples from the Model. This currently only supports equal-sized runs.
 
@@ -65,6 +65,9 @@ class InterSchemaAdapteRIID(WorkerHandler):
         :param nA:      Number of Annotators to assign per Run
         :param pS:      Probability over Schemas
         :param pA:      Probability over Annotators.
+        :param same_schema_per_annotator: If False, then it is possible for different annotators to use a different
+                        schema
+        :param return_U: If True, then also keep track of U
         :return:        Tuple containing Z, S, A, Y
         """
         # First Seed the random number generator
@@ -72,15 +75,22 @@ class InterSchemaAdapteRIID(WorkerHandler):
 
         # Generate Z and S at one go
         Z = np.random.choice(self.sZU, size=n_runs * n_times, p=self.Pi)      # Latent State
-        S = np.repeat(np.random.choice(self.sS, size=n_runs, p=pS), n_times)  # Schema
+        if same_schema_per_annotator:
+            S = np.repeat(np.random.choice(self.sS, size=n_runs, p=pS), n_times)  # Schema
+        else:
+            S = np.repeat(np.random.choice(self.sS, size=[n_runs, self.sK], p=pS), n_times, axis=0)
 
         # With regards to the observations, have to do on a sample-by-sample basis.
         Y = np.full([n_runs * n_times, self.sK], fill_value=np.NaN)  # Observations Matrix
         A = np.empty([n_runs * n_times, nA], dtype=int)  # Annotator Selection Matrix
-        self.__generate_samples_same(n_runs, n_times, pA, self.Psi, self.Omega, Z, S, A, Y)
+        U = np.full([n_runs * n_times, self.sK], fill_value=np.NaN) if return_U else None
+        if same_schema_per_annotator:
+            self.__generate_samples_same(n_runs, n_times, pA, self.Psi, self.Omega, Z, S, A, Y, U)
+        else:
+            self.__generate_samples_different(n_runs, n_times, pA, self.Psi, self.Omega, Z, S, A, Y, U)
 
         # Return as a Tuple
-        return Z, S, A, Y
+        return (Z, S, A, Y, U) if return_U else (Z, S, A, Y)
 
     def fit(self, Y, S, priors=None, starts=1, return_diagnostics=False):
         """
@@ -300,7 +310,7 @@ class InterSchemaAdapteRIID(WorkerHandler):
                 m_omega[n, k, :] = np.ones(sU) if np.isnan(Y[n, k]) else omega[int(S[n]), :, int(Y[n, k])]
 
     @staticmethod
-    def __generate_samples_same(n_runs, n_times, pA, psi, omega, Z, S, A, Y):
+    def __generate_samples_same(n_runs, n_times, pA, psi, omega, Z, S, A, Y, U):
         """
         Wrapper Function for generating samples, in case it will be supported by Numba in the future.
 
@@ -328,7 +338,41 @@ class InterSchemaAdapteRIID(WorkerHandler):
                 for k in A[nt]:                                             # Iterate over Annotators for this segment
                     u_k = np.random.choice(sZU, p=psi[Z[nt], k, :])         # Compute Annotator Emission (confusion)
                     Y[nt, k] = u_k if omega[S[nt], u_k, u_k] == 1 else sZU  # Project Observation or NIS
+                    if U is not None:
+                        U[nt, k] = u_k
 
+    @staticmethod
+    def __generate_samples_different(n_runs, n_times, pA, psi, omega, Z, S, A, Y, U):
+        """
+        Wrapper Function for generating samples, in case it will be supported by Numba in the future. This variant
+        supports using a different schema per-annotator.
+
+        :param n_runs:
+        :param n_times:
+        :param pA:
+        :param psi:
+        :param omega:
+        :param Z:
+        :param S:
+        :param A:
+        :param Y:
+        :return:
+        """
+        # Compute some Sizes
+        sZU, sK, _ = psi.shape
+        nA = A.shape[1]
+
+        # Iterate over all segments
+        for n in range(n_runs):
+            # Pick Annotators for this segment
+            A[n * n_times:(n + 1) * n_times, :] = np.random.choice(sK, size=nA, replace=False, p=pA)
+            # Iterate over time-instances in this Segment
+            for nt in range(n * n_times, (n + 1) * n_times):
+                for k in A[nt]:  # Iterate over Annotators for this segment
+                    u_k = np.random.choice(sZU, p=psi[Z[nt], k, :])  # Compute Annotator Emission (confusion)
+                    Y[nt, k] = u_k if (omega[S[nt, k], int(u_k), int(u_k)] == 1) else sZU # Project Observation or NIS
+                    if U is not None:
+                        U[nt, k] = u_k
 
     # ========================== Private Nested Implementations ========================== #
     class _EMWorker(IWorker):

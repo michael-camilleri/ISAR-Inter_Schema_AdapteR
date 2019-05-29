@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import argparse
 
-DEFAULTS = {'Results': '../../data/Parameters_ISAR.npz', 'Independent': False}
+DEFAULTS = {'Results': '../data/Parameters_ISAR.npz', 'Independent': False}
 
 
 if __name__ == '__main__':
@@ -63,9 +63,9 @@ if __name__ == '__main__':
     plt.errorbar(Data_sizes.mean(axis=0), np.mean(rad_full_pi, axis=0), yerr=np.std(rad_full_pi, axis=0),
                  label='$\Pi$ (Full)', linewidth=2.0, color='b', linestyle='--')
     plt.errorbar(Data_sizes.mean(axis=0), np.mean(rad_isar_psi, axis=0), yerr=np.std(rad_isar_psi, axis=0),
-                 label='$\Psi$ (ISAR)', linewidth=2.0, color='orange', linestyle='-')
+                 label='$\Psi$ (ISAR)', linewidth=2.0, color='red', linestyle='-')
     plt.errorbar(Data_sizes.mean(axis=0), np.mean(rad_full_psi, axis=0), yerr=np.std(rad_full_psi, axis=0),
-                 label='$\Psi$ (Full)', linewidth=2.0, color='orange', linestyle='--')
+                 label='$\Psi$ (Full)', linewidth=2.0, color='red', linestyle='--')
     # [B] - Improve Plot
     plt.legend(fontsize=20)
     plt.xlabel('Data-Set Size', fontsize=20)

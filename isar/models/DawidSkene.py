@@ -96,7 +96,9 @@ class DawidSkeneIID(WorkerHandler):
 
             # --- Construct Conditional on U from confusion matrices --- #
             for k in range(self.sK):
-                self.Psi[:, k, :] += confusion_matrix(z, U[:, k], labels=np.arange(len(self.Pi)))
+                # Mask against NaN
+                valid_u = ~np.isnan(U[:, k])
+                self.Psi[:, k, :] += confusion_matrix(z[valid_u], U[valid_u, k], labels=np.arange(len(self.Pi)))
             self.Psi = npext.sum_to_one(self.Psi, axis=-1)
 
             # --- Return Self (chaining) --- #
