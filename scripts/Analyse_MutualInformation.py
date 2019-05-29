@@ -15,7 +15,7 @@ if __name__=='__main__':
 
     # ==== Load/Prepare the Data ==== #
     # ---- Load Parameters ---- #
-    with np.load('../../data/model.mrc.npz') as _data:
+    with np.load('../data/model.mrc.npz') as _data:
         omega = _data['omega']
         pi = _data['pi']
         psi = _data['psi']

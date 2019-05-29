@@ -19,14 +19,14 @@ sys.path.append('..')
 from isar.models import InterSchemaAdapteRIID
 
 # Default Parameters
-DEFAULTS = {'Output':  '../../data/Parameters_ISAR',      # Result File
+DEFAULTS = {'Output':  '../data/Parameters_ISAR',         # Result File
             'Random':  '0',                               # Random Seed offset
             'Numbers': ['0', '20'],                       # Range: start index, number of runs
-            'Lengths': ['60', '5400'],                    # Number and length of segments
-            'Sizes':   ['13', '11'],                      # Dimensionality of the data: sZ/sK
+            'Lengths': ['500', '100'],                    # Number and length of segments
+            'Sizes':   ['7', '6'],                        # Dimensionality of the data: sZ/sK
             'Steps':   ['0.001', '0.005', '0.01', '0.05', '0.1', '0.5', '1.0'],  # Step Sizes
-            'Extreme': False,                             # One-V-Rest?
-            'Different': False                            # Different schemas within Sample?
+            'Extreme': True,                              # One-V-Rest?
+            'Different': True                            # Different schemas within Sample?
             }
 nA = 3
 
@@ -76,7 +76,7 @@ if __name__ == '__main__':
     NIS = sZ  # NIS Label
 
     # ==== Load/Prepare the Data ==== #
-    with np.load('../../data/model.mrc.npz') as _data:
+    with np.load('../data/model.mrc.npz') as _data:
         # ---- Load Baseline Components ---- #
         pi = npext.sum_to_one(_data['pi'][:sZ])                         # Note that we have to ensure normalisation
         psi = npext.sum_to_one(_data['psi'][:sZ, :sK, :sU], axis=-1)
@@ -187,11 +187,11 @@ if __name__ == '__main__':
                        np.stack([npext.sum_to_one(np.eye(sZ, sZ) + np.full([sZ, sZ], fill_value=0.01), axis=1)
                                  for _ in range(sK)]).swapaxes(0, 1))]
             # Train ISAR Model
-            isar_model = InterSchemaAdapteRIID(omega, -1, 200, sink=sys.stdout)
-            results = isar_model.fit_model(y_i, s_i, priors, starts)
+            isar_model = InterSchemaAdapteRIID([sZ, sK, sS], omega, max_iter=200, random_state=args.random, sink=sys.stdout)
+            isar_model.fit(y_i, s_i, priors, starts)
             # Store results
-            pi_isar[run, i, :] = results.Pi
-            psi_isar[run, i, :, :, :] = results.Psi
+            pi_isar[run, i, :] = isar_model.Pi
+            psi_isar[run, i, :, :, :] = isar_model.Psi
 
     # ===== Finally store the results to File: ===== #
     print('Storing Results to file ... ')
