@@ -151,9 +151,9 @@ This is again a two-stage process. To replicate Fig. 4 (a):
    python Visualise_Parameter_Learning.py -r ../data/Parameters_ISAR.npz
    ```
    
-For Fig. 4 (b) follow the same procedure but we allow for a different schema per sample by passing the `-f` flag:
+For Fig. 4 (b) follow the same procedure but we allow for a different schema per sample by passing the `-d` flag:
    ```bash
-   python Simulate_Parameter_Learning.py -o ../data/Parameters_ISAR -r 0 -n 0 20 -l 500 100 -s 7 6 -i 0.001 0.005 0.01 0.05 0.1 0.5 1.0 -e -f
+   python Simulate_Parameter_Learning.py -o ../data/Parameters_ISAR -r 0 -n 0 20 -l 500 100 -s 7 6 -i 0.001 0.005 0.01 0.05 0.1 0.5 1.0 -e -d
    ```
 Following this, you can visualise results as before.
 
