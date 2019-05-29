@@ -1,9 +1,9 @@
 # ISAR (Inter-Schema AdapteR)
 
 This repository contains python code for replicating the Results in the Paper:
-> "A Model for Learning Across Related Label Spaces", Under Review
+> "Dawid-Skene on Steroids: Fusing Information from Multiple Data Schemas", Under Review at the ECMLPKDD Workshop on Automating Data Science
 
-**Due to the nature of our collaboration with MRC Harwell, we can only provide the data (and code) for the simulation components of the study.**
+**Due to the nature of our collaboration with MRC Harwell, we can only provide the data for the simulation components of the study: we do however provide the code to replicate all results.**
 
 ## Contents
 
@@ -15,13 +15,11 @@ This repository contains python code for replicating the Results in the Paper:
 
 At the top level, there are two `requirements` files, for easy installation of the necessary packages (except for the custom mpctools library: instructions for this are provided below). 
 There are 3 high-level directories:
- * **isar**: Contains the ISAR implementations for the Multinomial Class-Conditional and Inter-Annotator Variability models under the `models` package.
+ * **isar**: Contains the classes implementing the two models in our paper, the baseline DS and Extended DS using our ISAR adapter, under the `models` package.
  * **scripts**: Contains the scripts for replicating the results in the paper.
-    * ***20 Newsgroups***: Contains scripts for replicating the results of the simulations on the 20 Newsgroups Dataset (i.e. Section 5.1 in the Paper).
-    * ***MRC Harwell***: Contains scripts for replicating the results of the simulations and analysis on the MRC Harwell Data (i.e. Sections 5.2.2, 5.3 and 5.4).
  * **data**: Directory which at the outset contains the parameters for the MRC-Harwell-trained models which form the basis of our simulations. This is also the default directory for storing results from simulation runs (but can be configured, see below).
  
-In general, the replication scripts are split into two stages: one for simulating and training the models, and the other for visualising results.
+In general, the replication scripts are split into two stages: one for simulating/training the models, and the other for visualising results.
 
 ## Installation and Setting Up
 
@@ -37,6 +35,7 @@ The code also makes use of the following libraries: for simplicity, we provide c
  * pathos
  * pandas
  * numpy
+ * numba
  
 We also use our own externally packaged `mpctools` library. Instructions are provided below for setting it up.
 
@@ -78,38 +77,40 @@ All the scripts support some form of tweaking by way of command line arguments p
 
 We will now describe replication of the results in each relevant section
 
-### Predictive Performance on the 20 Newsgroups Data-set (Section 5.1)
+### Likelihood-based Evaluation on the real data (Section 5.2)
 
-Replicating Fig. 5 is a three-stage process.
+Due to the ownership of the data, we cannot publicly provide the data for this section (do get in touch if you are interested in exploring it however). We do however provide the code used to generate the results, showing how we calculate metrics and the assumptions we do. And obviously, if one has access to another data-source with the same modality, the results can be compared.
 
-1. Load the 20 Newsgroups Data-set and format it accordingly to our problem. The below configuration is also the default and is only specified here for completeness' sake.
-   ```
-   python Load.py -o ../../data/20NG_BOW -r 1010 -f 5000 -t 0.2
-   ```
-2. Train the Model(s). This has to be called 4 times to generate the 4 plots in Fig. 5, each time changing the bootstrap percentage (and the output file name, otherwise it will just overwrite the other results):
-   ```
-   python Learn.py -s ../../data/20NG_BOW.npz -o ../../data/<NAME> -r 0 -n 0 30 -f <FRACTION> -a 0.005
-   ```
-   where `<FRACTION>` should be one from [0.02, 0.05, 0.1, 0.2]. The default is for 0.02.
-   
-3. Visualise the Results. This is called once, passing in as a list the (4) result files. Assuming each file was named Results_{} where {} is a standin for the percentage, this can be by achieved:
-   ```
-   python Visualise.py -r ../../data/Results_02.npz ../../data/Results_05.npz ../../data/Results_10.npz ../../data/Results_20.npz -n 2% 5% 10% 20%
-   ```
-   The second parameter allows customisation of the naming of the lines on the plot.
+We assume a dataset stored as a Pandas dataframe (in msgpack format). The index columns are:
+ * The Fold Index (Letters, in our case A through K)
+ * The Run Number: This splits the samples into contiguous runs (in our case, 0 through 62)
+ * The Mouse Identifier (unique, in our case RFID)
+ * Time-Stamp (absolute time since epoch)
+As regards Data Columns:
+ * Schema: set in I, II, III, V (other values can be considered if you specify the schemas/names appropriately: the script must be modified accordingly)
+ * Segment: A 3-Letter alphabetical segment identifier
+ * Annotator Labels: Albl.1 through Albl.12 (skipping 11). These are CDType 0 through 13 (12 behaviours + NIS). The NIS
+    distinguishes between informative unlabelling and missing data according to Section 4 (pg 7)
 
+Given the above, Table 1 can be replicated in a two-step process:
 
-### Analysis on the Crowdsourced Characterisation Task (Section 5.2)
-
-Due to the ownership of the data, we can only show here the results for the inference of the latent state on simulated 
-data (i.e. Section 5.2.2). That being said, care was taken to model the data generation process as close as possible. 
-
-Tables 4/6 can be replicated in a two-step process.
-
-1. Train the DS/ISAR Models on the entire dataset. This will generate two files, one each for DS and ISAR: just pass `none` to the -o parameter if you wish to suppress any simulation component. The below is the code to generate the results for the `Realistic` case (which is also the default): note that this will take about 10 Hours since it has not **yet** been optimised to run multiple runs
-in parallel.
+1. Train the DS/ISAR Models on the true dataset. This will generate two files, one each for DS and ISAR: just pass `none` to the -o parameter if you wish to suppress any simulation component. For a complete replication, execute the below:
    ```bash
-   python Learn_Compare.py -o ../../data/Compare_DS ../../data/Compare_ISAR -r 0 -n 0 20 -l 60 5400 -f 10 -s 13 15 17 10
+   python Learn_MRC_DATA.py -i ../data/mrc_data.df -o ../data/Learn_DS ../data/Learn_ISAR -r 0
+   ```
+2. Visualise the Results, in Tabular Form:
+   ```bash
+   python Visualise_MRC_Data.py -r ../data/Learn_DS.npz ../data/Learn_ISAR.npz -s I II III IV
+   ```
+   Note that the `-s` flag is only as a way of labelling the tables.
+
+### Latent State Inference in Synthethic Data (Section 5.3)
+
+With the synthethic data we sought to capture the data generation process as close as possible to what we learnt above. Tables 2/4 can be replicated in a two-step process.
+
+1. Train the DS/ISAR Models on the entire dataset. This will generate two files, one each for DS and ISAR: just pass `none` to the -o parameter if you wish to suppress any simulation component. The below is the code to generate the results for the `Realistic` case (which is also the default): note that this will take about 6 Hours since it has not **yet** been optimised to run multiple runs in parallel.
+   ```bash
+   python Simulate_Predictions.py -o ../data/Compare_DS ../data/Compare_ISAR -r 0 -n 0 20 -l 60 5400 -f 10 -s 13 15 17 10 -p true
    ```
    In all cases, the following parameters are common:
     * `-r 0` (Random State)
@@ -120,64 +121,63 @@ in parallel.
       |     Case    |   -l    |     -s      |  -p   |
       | ----------- | ------- | ----------- | ----- |
       | `Realistic` | 60 5400 | 13 15 17 10 | true  |
-      | `Reduced`   | 500 100 | 13 15 17 10 | true  |
-      | `Uniform`   | 500 100 | 13 15 17 10 | unif  |
-      | `Dirichlet` | 500 100 | 13 15 17 10 | 10    |
-      | `Biased`    | 500 100 | 1  10 1  10 | true  |
-      | `Bias&Unif` | 500 100 | 1  10 1  10 | unif  |  
+      | `Reduced`   | 60 100  | 13 15 17 10 | true  |
+      | `Uniform`   | 60 100  | 13 15 17 10 | unif  |
+      | `Dirichlet` | 60 100  | 13 15 17 10 | 10    |
+      | `Biased`    | 80 100  | 1  10 1  10 | true  |
+      | `Bias&Unif` | 80 100  | 1  10 1  10 | unif  |
 
 
 2. Visualise the Results in Tabular Format: again, the default configuration (up to specification of which result files to use) is enough, but is given here for posterity:
    ```bash
-   python Visualise_Compare.py -r ../../data/Compare_DS.npz ../../data/Compare_ISAR.npz -s I II III IV
+   python Visualise_Predictions.py -r ../data/Compare_DS.npz ../data/Compare_ISAR.npz -s I II III IV
    ```
+   
 
-
-### Parameter Estimation in the multi-annotator scenario (Section 5.3)
+### Parameter Recovery from Synthethic Data (Section 5.4)
 
 We replicate here the results using both the 'extreme' One-v-Rest schemas, as well as the MRC-Harwell Schemas.
 
-#### One-vs-Rest Schemas (Section 5.3.1)
+#### One-vs-Rest Schemas
 
-This is again a two-stage process. To replicate Fig. 6 (a):
+This is again a two-stage process. To replicate Fig. 4 (a):
 
 1. Train the Model using the single-schema per-sample setting:
    ```bash
-   python Learn_Parameters.py -o ../../data/Parameters_ISAR -r 0 -n 0 20 -l 500 100 -s 7 6 -i 0.001 0.005 0.01 0.05 0.1 0.5 1.0 -e
+   python Simulate_Parameter_Learning.py -o ../data/Parameters_ISAR -r 0 -n 0 20 -l 500 100 -s 7 6 -i 0.001 0.005 0.01 0.05 0.1 0.5 1.0 -e
    ```
 2. Visualise the results:
    ```bash
-   python Visualise_Parameters.py -r ../../data/Parameters_ISAR.npz
+   python Visualise_Parameter_Learning.py -r ../data/Parameters_ISAR.npz
    ```
    
-For Fig. 6 (b) follow the same procedure but we allow for a different schema per sample by passing the `-f` flag:
+For Fig. 4 (b) follow the same procedure but we allow for a different schema per sample by passing the `-f` flag:
    ```bash
-   python Learn_Parameters.py -o ../../data/Parameters_ISAR -r 0 -n 0 20 -l 500 100 -s 7 6 -i 0.001 0.005 0.01 0.05 0.1 0.5 1.0 -e -f
+   python Simulate_Parameter_Learning.py -o ../data/Parameters_ISAR -r 0 -n 0 20 -l 500 100 -s 7 6 -i 0.001 0.005 0.01 0.05 0.1 0.5 1.0 -e -f
    ```
 Following this, you can visualise results as before.
 
-#### MRC Harwell Schemas (Section 5.3.2)
+#### MRC Harwell Schemas
 
-To replicate Fig. 8, we reuse the same scripts as above but with a different configuration (this is also the default configuration):
+To replicate Fig. 5, we reuse the same scripts as above but with a different configuration (this is also the default configuration):
 
 1. Train the Model under realistic conditions:
    ```bash
-   python Learn_Parameters.py -o ../../data/Parameters_ISAR -r 0 -n 0 20 -l 60 5400 -s 13 11 -i 0.001 0.005 0.01 0.05 0.1 0.5 1.0 
+   python Simulate_Parameter_Learning.py -o ../data/Parameters_ISAR -r 0 -n 0 20 -l 60 5400 -s 13 11 -i 0.001 0.005 0.01 0.05 0.1 0.5 1.0 
    ```
    
-2. Visualise the results: in this case, it is also helpful to visualise per-annotator Psi emissions (Fig. 8 (b)) using the `-i` flag
+2. Visualise the results: in this case, it is also helpful to visualise per-annotator Psi emissions (Fig. 5 (b)) using the `-i` flag
    ```bash
-   python Visualise_Parameters.py -r ../../data/Parameters_ISAR.npz -i
+   python Visualise_Parameter_Learning.py -r ../data/Parameters_ISAR.npz -i
    ```
    
-### Analysis of Mutual Information (Section 5.4)
+### Analysis of Mutual Information (Section 5.5)
 
-This is a one-part script which will generate all the values in Table 5:
+This is a one-part script which will generate all the values in Table 3 (and more):
 
 ```bash
-python AnalseMutualInformation.py
+python Analse_MutualInformation.py
 ```
-
 
 
 ## Troubleshooting
@@ -186,9 +186,6 @@ python AnalseMutualInformation.py
 
   FIX: Make sure you are running the scripts from the actual directory in which it exists. This is due to the fact that the library is not installed, and hence, all tools are relative to the script location.
   
-* PROBLEM: Executing '20 Newsgroups\Visualise.py' gives me a bunch of errors ending with `ValueError: unsupported format character ''' (0x27) at index 109`
-
-  FIX: This appears to be a limitation with running the script on Windows, and the way it handles special characters (in this case the percentage sign). To avoid this, make sure you specify the names of the lines using the `-n` switch.
   
 * PROBLEM: The script runs successfully, but fails when storing results with `FileNotFoundError: [Errno 2] No such file or directory: "XXXXXXX"`
 
