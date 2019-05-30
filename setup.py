@@ -3,11 +3,11 @@ from setuptools import setup
 setup(
     # Common Setup
     name="isar",
-    version="0.9.1",
+    version="1.0.0",
     packages=['isar.models'],
 
     # Requirements
-    install_requires=['numpy', 'mpctools', 'scikit-learn'],
+    install_requires=['numpy', 'mpctools', 'scikit-learn', 'matplotlib', 'numba', 'pandas'],
 
     # Meta-Data
     author='Michael P. J. Camilleri',
@@ -15,6 +15,6 @@ setup(
     description='Implementation of the ISAR architecture as presented in '
                 '"A Model for Learning Across Related Label Spaces"',
     license='GNU GPL',
-    keywords='annotations classification learning ',
+    keywords='annotations learning multi-schema multi-annotator',
     url='https://github.com/michael-camilleri/ISAR-Inter_Schema_AdapteR'
 )

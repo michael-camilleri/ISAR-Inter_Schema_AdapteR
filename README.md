@@ -27,17 +27,20 @@ The repository is designed to be a self-contained implementation, subject to som
 
 ### Requirements
 
-The code is designed to be run with Python 3 and will not work with Python 2. It is reccomended to set up a python virtual environment (example using [Conda](https://conda.io/en/latest/)). The code was tested and runs with Python 3.6.
+The code is designed to be run with Python 3 and will not work with Python 2. It is recommended to set up a python 
+virtual environment (example using [Conda](https://conda.io/en/latest/)). The code was tested and runs with Python 3.6.
 
-The code also makes use of the following libraries: for simplicity, we provide conda and pip requirements file for automatically installing the specified version of the library to guarantee compatibility:
+The code also makes use of the following libraries: for simplicity, we provide conda and pip requirements file for 
+automatically installing the specified version of the library to guarantee compatibility:
  * scikit-learn
  * matplotlib
- * pathos
+ * *pathos*
  * pandas
  * numpy
  * numba
  
-We also use our own externally packaged `mpctools` library. Instructions are provided below for setting it up.
+All the above, apart from *pathos* are available through conda: pathos needs to be installed through pip (all 
+instructions given below). We also use our own externally packaged `mpctools` library. Instructions are provided below for setting it up.
 
 ### Installation Procedure
 
@@ -62,7 +65,7 @@ If you just want to replicate the results in the paper and that is all that is r
 project we provide a setup script for installing it. Again, this is as simple as running the provided `setup.py` script:
   ```bash
   python setup.py sdist --format=tar
-  pip install dist/isar-0.9.1.tar
+  pip install dist/isar-1.0.0.tar
   ```
 
 ## Replicating the Results

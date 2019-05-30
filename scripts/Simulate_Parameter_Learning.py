@@ -7,6 +7,18 @@ Note that while the script allows some flexibility, it should probably not combi
 Note also that in these simulations, it is (again) assumed that each annotator either labels a segment or puts NIS.
 This stems from our modelling behaviour, in that if the annotator does not label the sample it is solely because it is
 not in-schema (i.e. we do not model missing-at-random behaviour.
+
+This program is free software: you can redistribute it and/or modify it under the terms of the GNU General Public
+License as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later
+version.
+
+This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied
+warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License along with this program. If not, see
+http://www.gnu.org/licenses/.
+
+Author: Michael P. J. Camilleri
 """
 
 from mpctools.extensions import npext
