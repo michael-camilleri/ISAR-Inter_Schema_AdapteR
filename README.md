@@ -1,8 +1,11 @@
 # ISAR (Inter-Schema AdapteR)
 
 This repository contains python code for replicating the Results in the Paper:
-> "Dawid-Skene on Steroids: Fusing Information from Multiple Data Schemas", Under Review at the ECMLPKDD Workshop on Automating Data Science
+> "The Extended Dawid-Skene Model: Fusing Information from Multiple Data Schemas", Under Review at the ECMLPKDD Workshop on Automating Data Science
 
+as well as the Extended Dawid-Skene model defined therein to fuse information from multiple annotators labelling under different schemas. 
+If you find the code useful in any of your projects, please consider citing the above paper.
+ 
 **Due to the nature of our collaboration with MRC Harwell, we can only provide the data for the simulation components of the study: we do however provide the code to replicate all results.**
 
 ## Contents
