@@ -13,12 +13,12 @@ http://www.gnu.org/licenses/.
 
 Author: Michael P. J. Camilleri
 """
-
 from mpctools.parallel import IWorker, WorkerHandler
 from sklearn.metrics import confusion_matrix
 from mpctools.extensions import npext
 from collections import namedtuple
 from numba import jit, float64
+from torch.nn import Module
 import numpy as np
 import time as tm
 import warnings
@@ -32,7 +32,8 @@ class DawidSkeneIID(WorkerHandler):
     DSIIDResult_t = namedtuple('DSIIDResult_t', ['Pi', 'Psi', 'Converged', 'Best', 'LLEvolutions'])
 
     # ========================== Initialisers ========================== #
-    def __init__(self, dims, params=None, max_iter=100, tol=1e-4, n_jobs=-1, random_state=None, sink=None):
+    def __init__(self, dims, params=None, max_iter=100, tol=1e-4, n_jobs=-1, random_state=None, sink=None, optim='em',
+                 device='cpu'):
         """
         Initialiser
 
@@ -41,10 +42,19 @@ class DawidSkeneIID(WorkerHandler):
                                 completely perfect distributions (i.e. perfect annotators)
         :param max_iter:        Maximum number of iterations in EM computation
         :param tol:             Tolerance for convergence in EM Computation
-        :param n_jobs:          Number of jobs: see documentation for mpctools.WorkerHandler
+        :param n_jobs:          Number of jobs: see documentation for mpctools.WorkerHandler. Note that if using
+                                  auto-grad with cuda then this is ignored.
         :param random_state:    If set, ensures reproducible results
         :param sink:            For debugging, outputs progress etc..
+        :param optim:           Optimisation mode when training. Select from:
+                                    'em': EM-based optimisation
+                                    'ag': Auto-Grad based optimisation
+        :param device:          Device to work with when running with auto-grad. Select from:
+                                    'cpu': On CPU
+                                    'cuda': On a GPU
         """
+        # Handle n_jobs:
+        n_jobs = -1 if (optim.lower() == 'em' and device.lower() == 'cuda') else n_jobs
 
         # Call Super-Class
         super(DawidSkeneIID, self).__init__(n_jobs, sink)
@@ -54,6 +64,8 @@ class DawidSkeneIID(WorkerHandler):
         self.__rand = random_state if random_state is not None else int(tm.time())
         self.__max_iter = max_iter
         self.__toler = tol
+        self.__optim = optim.lower()
+        self.__device = device.lower()
 
         # Prepare a valid probability for the model
         if params is None:
@@ -61,6 +73,38 @@ class DawidSkeneIID(WorkerHandler):
             self.Psi = np.tile(np.eye(self.sZU)[:, np.newaxis, :], [1, self.sK, 1])
         else:
             self.Pi, self.Psi = params
+
+    def sample(self, n_runs, n_times, nA, pA):
+        """
+        Sampler for the Model
+
+        :param n_runs:  Number of Runs to generate. Schemas/Annotators only vary between runs!
+        :param n_times: Length of each run
+        :param nA:      Number of Annotators to assign per Run: this allows leaving out certain annotators in runs.
+        :param pA:      Probability over Annotators.
+        :return:
+        """
+        # First Seed the random number generator
+        np.random.seed(self.__rand)
+
+        # Generate Z at one go
+        Z = np.random.choice(self.sZU, size=n_runs * n_times, p=self.Pi)  # Latent State
+
+        # With regards to the observations, have to do on a sample-by-sample basis.
+        A = np.empty([n_runs * n_times, nA], dtype=int)  # Annotator Selection Matrix
+        U = np.full([n_runs * n_times, self.sK], fill_value=np.NaN)
+
+        # Iterate over all segments
+        for n in range(n_runs):
+            # Pick Annotators for this segment
+            A[n * n_times:(n + 1) * n_times, :] = np.random.choice(self.sK, size=nA, replace=False, p=pA)
+            # Iterate over time-instances in this Segment
+            for nt in range(n * n_times, (n + 1) * n_times):
+                for k in A[nt]:  # Iterate over Annotators for this segment
+                    U[nt, k] = np.random.choice(self.sZU, p=self.Psi[Z[nt], k, :])  # Annotator Emission (confusion)
+
+        # Return Data
+        return Z, A, U
 
     def fit(self, U, z=None, priors=None, starts=1, return_diagnostics=False, learn_prior=True):
         """
@@ -119,7 +163,7 @@ class DawidSkeneIID(WorkerHandler):
             # --- Return Self (chaining) --- #
             return self
 
-        else:
+        elif self.__optim == 'em':
             # --- Indicate branch --- #
             self._print('Fitting DS Model using Expectation Maximisation')
 
@@ -154,6 +198,23 @@ class DawidSkeneIID(WorkerHandler):
 
             # Build (and return) Information Structure
             return (self, results) if return_diagnostics else self
+
+        else:
+            # --- Indicate branch --- #
+            self._print('Fitting DS Model using Auto-Grad')
+
+            # --- Handle Priors first --- #
+            if priors is None:
+                priors = (np.ones_like(self.Pi), np.ones_like(self.Psi))
+
+            # --- Now Handle Starting Points --- #
+            np.random.seed(self.__rand)
+            if hasattr(starts, '__len__'):
+                num_work = len(starts)
+            else:
+                num_work = starts
+                starts = [(npext.Dirichlet(priors[0]).sample(), npext.Dirichlet(priors[1]).sample())
+                          for _ in range(num_work)]
 
     def evidence_log_likelihood(self, U, prior=None):
         """
@@ -324,7 +385,6 @@ class DawidSkeneIID(WorkerHandler):
 
             # Initialise Random Points (start)
             pi, psi = _data
-            sZ, sK, sU = psi.shape
 
             # Initialise Dirichlets
             pi_dir = npext.Dirichlet(_common.prior_pi)
@@ -441,3 +501,28 @@ class DawidSkeneIID(WorkerHandler):
                 for k in range(psi.shape[1]):
                     if not (np.isnan(U[n, k])):
                         psi[:, k, int(U[n, k])] += gamma[n, :]
+
+    class _DSModel(Module):
+        """
+        NN.Module for implementing the DS Model
+        """
+        def __init__(self, sZU, sK):
+            """
+            Initialiser
+
+            :param sZU: Size of the Latent/Observed Spaces
+            :param sK:  Number of Annotators
+            """
+            super(DawidSkeneIID._DSModel, self).__init__()
+
+
+    class _AGWorker(IWorker):
+        """
+        (Private) Nested class for running the Auto-grad Algorithm
+
+        Note that in this case, the index order is n,z,k,u (i.e. Sample, Latent, Annotator, Label)
+        """
+        ComputeParams_t = namedtuple('ComputeParams_t', ['max_iter', 'U', 'prior_pi', 'prior_psi', 'device'])
+
+
+
