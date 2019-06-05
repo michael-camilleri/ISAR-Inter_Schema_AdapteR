@@ -315,7 +315,7 @@ class DawidSkeneIID(WorkerHandler):
                             > psi - Initial value for psi
             :return: Named Tuple containing
                             > Pi (optimised): size |Z|
-                            > Psi (optimised): size |Z| by (K * |U|)
+                            > Psi (optimised): size |Z| by K by |U|
                             > Whether the run converged or not within max-iterations
                             > Evolution of (evidence) log-likelihood through iterations.
             """
