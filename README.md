@@ -8,6 +8,8 @@ If you find the code useful in any of your projects, please consider citing the 
  
 **Due to the nature of our collaboration with MRC Harwell, we can only provide the data for the simulation components of the study: we do however provide the code to replicate all results.**
 
+**Note: This version contains an as yet unstable implementation of the DS Model using auto-grad as opposed to EM**.
+
 ## Contents
 
 1. Repository Structure

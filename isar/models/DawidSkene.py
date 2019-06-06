@@ -165,9 +165,12 @@ class DawidSkeneIID(WorkerHandler):
             # --- Return Self (chaining) --- #
             return self
 
-        elif self.__optim == 'em':
+        else:
             # --- Indicate branch --- #
-            self._print('Fitting DS Model using Expectation Maximisation')
+            if self.__optim == 'em':
+                self._print('Fitting DS Model using Expectation Maximisation')
+            else:
+                self._print('Fitting DS Model using Gradient Descent')
 
             # --- Handle Priors first --- #
             if priors is None:
@@ -185,7 +188,7 @@ class DawidSkeneIID(WorkerHandler):
             # Perform EM (and format output)
             self._print('Running {0} starts for (max) {1} iterations.'.format(num_work, self.__max_iter))
             self.start_timer('global')
-            results = self.run_workers(num_work, self._EMWorker,
+            results = self.run_workers(num_work, self._EMWorker if self.__optim == 'em' else self._AGWorker,
                                        _configs=self.ComputeParams_t(self.__max_iter, self.__toler, U, *priors),
                                        _args=starts)
             # Consolidate Data
@@ -200,23 +203,6 @@ class DawidSkeneIID(WorkerHandler):
 
             # Build (and return) Information Structure
             return (self, results) if return_diagnostics else self
-
-        else:
-            # --- Indicate branch --- #
-            self._print('Fitting DS Model using Auto-Grad')
-
-            # --- Handle Priors first --- #
-            if priors is None:
-                priors = (np.ones_like(self.Pi), np.ones_like(self.Psi))
-
-            # --- Now Handle Starting Points --- #
-            np.random.seed(self.__rand)
-            if hasattr(starts, '__len__'):
-                num_work = len(starts)
-            else:
-                num_work = starts
-                starts = [(npext.Dirichlet(priors[0]).sample(), npext.Dirichlet(priors[1]).sample())
-                          for _ in range(num_work)]
 
     def evidence_log_likelihood(self, U, prior=None):
         """
@@ -542,14 +528,14 @@ class DawidSkeneIID(WorkerHandler):
             # Now generate likelihood, starting with prior
             log_likelihood = torch.mul(self.pi_prior, pi).sum() + torch.mul(self.psi_prior, psi).sum()
             for n in range(sN):
-                m_pi = torch.zeros(1, dtype=torch.double, requires_grad=True)
+                m_pi = torch.zeros(1, dtype=torch.double)
                 for z in range(sZ):
-                    m_psi = torch.full(1, fill_value=pi[z], dtype=torch.double, requires_grad=True)
+                    m_psi = torch.full((1,), fill_value=pi[z].item(), dtype=torch.double)
                     for k in range(sK):
                         if not (np.isnan(U[n, k])):
-                            m_psi *= psi[z, k, U[n, k]]
+                            m_psi *= psi[z, k, int(U[n, k])]
                     m_pi += m_psi
-                log_likelihood += torch.log(m_pi)
+                log_likelihood += torch.log(m_pi).sum()
 
             # Return log_likelihood
             return log_likelihood
@@ -608,7 +594,7 @@ class DawidSkeneIID(WorkerHandler):
 
             # Create Model & Optimiser
             model = DawidSkeneIID._DSModel(_data[0], _data[1], _common.prior_pi, _common.prior_psi)
-            optim = Adam(model.parameters)
+            optim = Adam(model.parameters())
 
             # Start the Loop
             while iterations < _common.max_iter:
