@@ -13,15 +13,18 @@ http://www.gnu.org/licenses/.
 
 Author: Michael P. J. Camilleri
 """
+from torch.nn import Module, Parameter, functional as tfunc
 from mpctools.parallel import IWorker, WorkerHandler
 from sklearn.metrics import confusion_matrix
 from mpctools.extensions import npext
 from collections import namedtuple
+from scipy.special import gamma
 from numba import jit, float64
-from torch.nn import Module
+from torch.optim import Adam
 import numpy as np
 import time as tm
 import warnings
+import torch
 import copy
 
 
@@ -30,6 +33,8 @@ class DawidSkeneIID(WorkerHandler):
     This Class implements the Noisy Annotator Model, following the Formulation of Dawid-Skene in an IID fashion.
     """
     DSIIDResult_t = namedtuple('DSIIDResult_t', ['Pi', 'Psi', 'Converged', 'Best', 'LLEvolutions'])
+    ComputeParams_t = namedtuple('ComputeParams_t', ['max_iter', 'tolerance', 'U', 'prior_pi', 'prior_psi'])
+    ComputeResult_t = namedtuple('ComputeResult_t', ['Pi', 'Psi', 'Converged', 'LLEvolutions'])
 
     # ========================== Initialisers ========================== #
     def __init__(self, dims, params=None, max_iter=100, tol=1e-4, n_jobs=-1, random_state=None, sink=None, optim='em',
@@ -43,19 +48,16 @@ class DawidSkeneIID(WorkerHandler):
         :param max_iter:        Maximum number of iterations in EM computation
         :param tol:             Tolerance for convergence in EM Computation
         :param n_jobs:          Number of jobs: see documentation for mpctools.WorkerHandler. Note that if using
-                                  auto-grad with cuda then this is ignored.
+                                  auto-grad with cuda then you have to be carefull to not overload the GPU.
         :param random_state:    If set, ensures reproducible results
         :param sink:            For debugging, outputs progress etc..
         :param optim:           Optimisation mode when training. Select from:
                                     'em': EM-based optimisation
                                     'ag': Auto-Grad based optimisation
-        :param device:          Device to work with when running with auto-grad. Select from:
+        :param device:          Device to work with when running with auto-grad. Currently has no effect. Select from:
                                     'cpu': On CPU
                                     'cuda': On a GPU
         """
-        # Handle n_jobs:
-        n_jobs = -1 if (optim.lower() == 'em' and device.lower() == 'cuda') else n_jobs
-
         # Call Super-Class
         super(DawidSkeneIID, self).__init__(n_jobs, sink)
 
@@ -184,7 +186,7 @@ class DawidSkeneIID(WorkerHandler):
             self._print('Running {0} starts for (max) {1} iterations.'.format(num_work, self.__max_iter))
             self.start_timer('global')
             results = self.run_workers(num_work, self._EMWorker,
-                                       _configs=self._EMWorker.ComputeParams_t(self.__max_iter, self.__toler, U, *priors),
+                                       _configs=self.ComputeParams_t(self.__max_iter, self.__toler, U, *priors),
                                        _args=starts)
             # Consolidate Data
             self.Pi = results.Pi
@@ -343,9 +345,7 @@ class DawidSkeneIID(WorkerHandler):
 
         Note that in this case, the index order is n,z,k,u (i.e. Sample, Latent, Annotator, Label)
         """
-        ComputeParams_t = namedtuple('ComputeParams_t', ['max_iter', 'tolerance', 'U', 'prior_pi', 'prior_psi'])
         Responsibilities_t = namedtuple('Responsibilities_t', ['gamma', 'log_likelihood'])
-        ComputeResult_t = namedtuple('ComputeResult_t', ['Pi', 'Psi', 'Converged', 'LLEvolutions'])
 
         def __init__(self, _id, _handler):
             """
@@ -425,7 +425,7 @@ class DawidSkeneIID(WorkerHandler):
             converged = self._converged(loglikelihood, _common.tolerance)
 
             # Return Result
-            return DawidSkeneIID._EMWorker.ComputeResult_t(pi, psi, converged, loglikelihood)
+            return DawidSkeneIID.ComputeResult_t(pi, psi, converged, loglikelihood)
 
         @staticmethod
         def _compute_responsibilities(U, pi, psi):
@@ -506,15 +506,53 @@ class DawidSkeneIID(WorkerHandler):
         """
         NN.Module for implementing the DS Model
         """
-        def __init__(self, sZU, sK):
+        def __init__(self, pi_init, psi_init, pi_prior, psi_prior):
             """
             Initialiser
 
-            :param sZU: Size of the Latent/Observed Spaces
-            :param sK:  Number of Annotators
+            :param pi_init: Initial point for Pi: Numpy Array (not tensor)
+            :param psi_init: Initial point for Psi: Numpy Array (not tensor)
             """
+            # Call Parent Constructor
             super(DawidSkeneIID._DSModel, self).__init__()
 
+            # Now keep track of the parameters for our model
+            self.pi_star = Parameter(data=torch.as_tensor(npext.invert_softmax(pi_init))).double()
+            self.psi_star = Parameter(data=torch.as_tensor(npext.invert_softmax(psi_init))).double()
+
+            # Finally store priors
+            self.pi_prior = torch.as_tensor(pi_prior - 1).double()
+            self.psi_prior = torch.as_tensor(psi_prior - 1).double()
+
+        def forward(self, U):
+            """
+            Compute log-likelihood from Input and current parameters.
+
+            :param U:
+            :return:
+            """
+            # Compute Softmax
+            pi = tfunc.softmax(self.pi_star)
+            psi = tfunc.softmax(self.psi_star, dim=2)
+
+            # Compute some sizes
+            sN, sK = np.shape(U)
+            sZ = len(pi)
+
+            # Now generate likelihood, starting with prior
+            log_likelihood = torch.mul(self.pi_prior, pi).sum() + torch.mul(self.psi_prior, psi).sum()
+            for n in range(sN):
+                m_pi = torch.zeros(1, dtype=torch.double, requires_grad=True)
+                for z in range(sZ):
+                    m_psi = torch.full(1, fill_value=pi[z], dtype=torch.double, requires_grad=True)
+                    for k in range(sK):
+                        if not (np.isnan(U[n, k])):
+                            m_psi *= psi[z, k, U[n, k]]
+                    m_pi += m_psi
+                log_likelihood += torch.log(m_pi)
+
+            # Return log_likelihood
+            return log_likelihood
 
     class _AGWorker(IWorker):
         """
@@ -522,7 +560,97 @@ class DawidSkeneIID(WorkerHandler):
 
         Note that in this case, the index order is n,z,k,u (i.e. Sample, Latent, Annotator, Label)
         """
-        ComputeParams_t = namedtuple('ComputeParams_t', ['max_iter', 'U', 'prior_pi', 'prior_psi', 'device'])
+        def __init__(self, _id, _handler):
+            """
+            Initialiser
 
+            :param _id:         Identifier - allows different seeds for random initialisation
+            :param _handler:    The Worker Handler
+            """
+            # Initialise Super-Class
+            super(DawidSkeneIID._AGWorker, self).__init__(_id, _handler)
 
+        def parallel_compute(self, _common, _data):
+            """
+            Implementation of Parallel Computation
+            :param _common: NamedTuple of type ComputeParams_t
+                            > max_iter:     Maximum number of iterations to compute for
+                            > tolerance:    Tolerance Parameter for early stopping: if Likelihood does not change more
+                                            than this amount between Iterations, then stop.
+                            > U:            The Data, of size N by K (values in {0, ..., sZ-1, np.NaN})
+                            > prior_pi:     Prior Probabilities for the Pi Distributions (over Z), of size |Z|. Note
+                                            that this should be the true prior )alpha) and not laplacian smoothing
+                                            counts.
+                            > prior_psi:    Prior Probabilities for the Psi Distributions (over U), of size  |Z| by K by
+                                            |U|. Again these should be the true priors, (alpha) and not laplacian
+                                            smoothing counts.
+            :param _data:   None or [pi, psi]
+                            > pi - Initial value for pi
+                            > psi - Initial value for psi
+            :return: Named Tuple containing
+                            > Pi (optimised): size |Z|
+                            > Psi (optimised): size |Z| by K by |U|
+                            > Whether the run converged or not within max-iterations
+                            > Evolution of (evidence) log-likelihood through iterations.
+            """
+            # Initialise Random Points (start)
+            pi, psi = _data
 
+            # Compute offset to log_likelihood to account for dirichlet normalisers
+            lognorm = np.log(np.prod(gamma(_common.prior_pi), axis=-1) /
+                             gamma(np.sum(_common.prior_pi, axis=-1))).sum() \
+                      + np.log(np.prod(gamma(_common.prior_psi), axis=-1) /
+                               gamma(np.sum(_common.prior_psi, axis=-1))).sum()
+
+            # Prepare for Loop
+            iterations = 0  # Iteration Count
+            loglikelihood = []  # Observed Data Log-Likelihood (evolutions)
+
+            # Create Model & Optimiser
+            model = DawidSkeneIID._DSModel(_data[0], _data[1], _common.prior_pi, _common.prior_psi)
+            optim = Adam(model.parameters)
+
+            # Start the Loop
+            while iterations < _common.max_iter:
+                # ------------ Likelihood ------------- #
+                optim.zero_grad()
+                loss = - model(_common.U)
+                loglikelihood.append(-loss.item() + lognorm)
+
+                # --------- Likelihood-Check: --------- #
+                # Check for convergence!
+                if self._converged(loglikelihood, _common.tolerance):
+                    break
+
+                # -------------- Step: -------------- #
+                loss.backward()
+                optim.step()
+
+                # -------------- Iteration Control -------------- #
+                iterations += 1
+                self.update_progress(iterations * 100.0 / _common.max_iter)
+
+            # Clean up
+            self.update_progress(100.0)
+            converged = self._converged(loglikelihood, _common.tolerance)
+
+            # Return Result
+            return DawidSkeneIID.ComputeResult_t(tfunc.softmax(model.pi_star).numpy(),
+                                                 tfunc.softmax(model.psi_star, dim=2).numpy(), converged, loglikelihood)
+
+        @staticmethod
+        def _converged(likelihoods, tolerance):
+            """
+            Convergence Check
+
+            Returns True only if converged, within tolerance
+            :param likelihoods: Array of Log-Likelihood
+            :param tolerance:   Tolerance Parameter
+            :return:
+            """
+            if len(likelihoods) < 2:
+                return False
+            elif likelihoods[-1] < likelihoods[-2]:
+                warnings.warn('Drop in Log-Likelihood Observed! Results are probably wrong.')
+            else:
+                return abs((likelihoods[-1] - likelihoods[-2]) / likelihoods[-2]) < tolerance
