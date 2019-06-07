@@ -531,14 +531,14 @@ class DawidSkeneIID(WorkerHandler):
             :return:
             """
             # Create Views
-            pi = self.pi.view(-1, 1)
+            pi = self.pi.view(self.sZ, 1)
             psi = self.psi.view(1, self.sZ, self.sK * self.sU)
             U = U.view(len(U), 1, self.sK * self.sU)
 
             # Now generate likelihood,
             log_likelihood = torch.log(torch.mm(torch.prod(torch.pow(psi, U), dim=2), pi)).sum() + \
-                             torch.mul(self.pi_prior, pi).sum() + torch.mul(self.psi_prior, psi).sum() - \
-                             self.pil * (self.pi.sum() - 1) - torch.mul(self.psil, (self.psi.sum(dim=2) - 1)).sum()
+                             torch.mul(self.pi_prior, torch.log(pi)).sum() + torch.mul(self.psi_prior, torch.log(psi)).sum() + \
+                             self.pil * (self.pi.sum() - 1) + torch.mul(self.psil, (self.psi.sum(dim=2) - 1)).sum()
 
             # Return log_likelihood
             return log_likelihood
