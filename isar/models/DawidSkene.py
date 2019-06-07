@@ -15,6 +15,7 @@ Author: Michael P. J. Camilleri
 """
 from torch.nn import Module, Parameter, functional as tfunc
 from mpctools.parallel import IWorker, WorkerHandler
+from sklearn.preprocessing import OneHotEncoder
 from sklearn.metrics import confusion_matrix
 from mpctools.extensions import npext
 from collections import namedtuple
@@ -184,6 +185,13 @@ class DawidSkeneIID(WorkerHandler):
                 num_work = starts
                 starts = [(npext.Dirichlet(priors[0]).sample(), npext.Dirichlet(priors[1]).sample())
                           for _ in range(num_work)]
+
+            # If using Auto-Grad, have to perform one-hot encoding:
+            #  This will involve some juggling: I need to first do a copy, convert NaN to -1 then do encoding...
+            if self.__optim == 'ag':
+                U_cpy = U.copy(); U_cpy[np.isnan(U_cpy)] = -1
+                U = OneHotEncoder(categories=[np.arange(self.sZU) for _ in range(self.sK)], handle_unknown='ignore',
+                                  sparse=False).fit_transform(U_cpy)
 
             # Perform EM (and format output)
             self._print('Running {0} starts for (max) {1} iterations.'.format(num_work, self.__max_iter))
@@ -506,9 +514,12 @@ class DawidSkeneIID(WorkerHandler):
             self.pi_star = Parameter(data=torch.as_tensor(npext.invert_softmax(pi_init))).double()
             self.psi_star = Parameter(data=torch.as_tensor(npext.invert_softmax(psi_init))).double()
 
+            # Now some Sizes:
+            self.sZ, self.sK, self.sU = psi_init.shape
+
             # Finally store priors
             self.pi_prior = torch.as_tensor(pi_prior - 1).double()
-            self.psi_prior = torch.as_tensor(psi_prior - 1).double()
+            self.psi_prior = torch.as_tensor(psi_prior - 1).view(-1, self.sK * self.sU).double()
 
         def forward(self, U):
             """
@@ -517,25 +528,13 @@ class DawidSkeneIID(WorkerHandler):
             :param U:
             :return:
             """
-            # Compute Softmax
-            pi = tfunc.softmax(self.pi_star)
-            psi = tfunc.softmax(self.psi_star, dim=2)
+            # Compute Softmax (after unravelling psi and adding first dimension for sum along samples)
+            pi = tfunc.softmax(self.pi_star.view(-1, 1), dim=0)
+            psi = tfunc.softmax(self.psi_star.view(1, self.sZ, self.sK * self.sU), dim=2)
+            U = U.view(len(U), 1, self.sK * self.sU)
 
-            # Compute some sizes
-            sN, sK = np.shape(U)
-            sZ = len(pi)
-
-            # Now generate likelihood, starting with prior
-            log_likelihood = torch.mul(self.pi_prior, pi).sum() + torch.mul(self.psi_prior, psi).sum()
-            for n in range(sN):
-                m_pi = torch.zeros(1, dtype=torch.double)
-                for z in range(sZ):
-                    m_psi = torch.full((1,), fill_value=pi[z].item(), dtype=torch.double)
-                    for k in range(sK):
-                        if not (np.isnan(U[n, k])):
-                            m_psi *= psi[z, k, int(U[n, k])]
-                    m_pi += m_psi
-                log_likelihood += torch.log(m_pi).sum()
+            # Now generate likelihood,
+            log_likelihood = torch.log(torch.mm(torch.prod(torch.pow(psi, U), dim=2), pi)).sum() + torch.mul(self.pi_prior, pi).sum() + torch.mul(self.psi_prior, psi).sum()
 
             # Return log_likelihood
             return log_likelihood
@@ -579,9 +578,6 @@ class DawidSkeneIID(WorkerHandler):
                             > Whether the run converged or not within max-iterations
                             > Evolution of (evidence) log-likelihood through iterations.
             """
-            # Initialise Random Points (start)
-            pi, psi = _data
-
             # Compute offset to log_likelihood to account for dirichlet normalisers
             lognorm = np.log(np.prod(gamma(_common.prior_pi), axis=-1) /
                              gamma(np.sum(_common.prior_pi, axis=-1))).sum() \
@@ -594,13 +590,14 @@ class DawidSkeneIID(WorkerHandler):
 
             # Create Model & Optimiser
             model = DawidSkeneIID._DSModel(_data[0], _data[1], _common.prior_pi, _common.prior_psi)
-            optim = Adam(model.parameters())
+            optim = Adam(model.parameters(), lr=0.1)
+            U = torch.as_tensor(_common.U).double()
 
             # Start the Loop
             while iterations < _common.max_iter:
                 # ------------ Likelihood ------------- #
                 optim.zero_grad()
-                loss = - model(_common.U)
+                loss = - model(U)
                 loglikelihood.append(-loss.item() + lognorm)
 
                 # --------- Likelihood-Check: --------- #
@@ -621,8 +618,9 @@ class DawidSkeneIID(WorkerHandler):
             converged = self._converged(loglikelihood, _common.tolerance)
 
             # Return Result
-            return DawidSkeneIID.ComputeResult_t(tfunc.softmax(model.pi_star).numpy(),
-                                                 tfunc.softmax(model.psi_star, dim=2).numpy(), converged, loglikelihood)
+            return DawidSkeneIID.ComputeResult_t(tfunc.softmax(model.pi_star, dim=0).detach().numpy(),
+                                                 tfunc.softmax(model.psi_star, dim=2).detach().numpy(), converged,
+                                                 loglikelihood)
 
         @staticmethod
         def _converged(likelihoods, tolerance):
