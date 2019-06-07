@@ -534,7 +534,9 @@ class DawidSkeneIID(WorkerHandler):
             U = U.view(len(U), 1, self.sK * self.sU)
 
             # Now generate likelihood,
-            log_likelihood = torch.log(torch.mm(torch.prod(torch.pow(psi, U), dim=2), pi)).sum() + torch.mul(self.pi_prior, pi).sum() + torch.mul(self.psi_prior, psi).sum()
+            log_likelihood = torch.log(torch.mm(torch.prod(torch.pow(psi, U), dim=2), pi)).sum() \
+                             + torch.mul(self.pi_prior, torch.log(pi)).sum() \
+                             + torch.mul(self.psi_prior, torch.log(psi)).sum()
 
             # Return log_likelihood
             return log_likelihood
