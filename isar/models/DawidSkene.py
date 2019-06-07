@@ -510,13 +510,15 @@ class DawidSkeneIID(WorkerHandler):
             # Call Parent Constructor
             super(DawidSkeneIID._DSModel, self).__init__()
 
-            # Now keep track of the parameters for our model
-            self.pi_star = Parameter(data=torch.as_tensor(npext.invert_softmax(pi_init))).double()
-            self.psi_star = Parameter(data=torch.as_tensor(npext.invert_softmax(psi_init))).double()
-
-            # Now some Sizes:
+            # First some Sizes:
             self.sZ, self.sK, self.sU = psi_init.shape
 
+            # Now keep track of the parameters for our model
+            self.pi = Parameter(data=torch.as_tensor(pi_init)).double()
+            self.psi = Parameter(data=torch.as_tensor(psi_init)).double()
+            self.pil = Parameter(data=torch.ones(1, dtype=torch.double))
+            self.psil = Parameter(data=torch.normal(mean=torch.zeros(self.sZ, self.sK),
+                                                    std=torch.ones(self.sZ, self.sK)).double())
             # Finally store priors
             self.pi_prior = torch.as_tensor(pi_prior - 1).double()
             self.psi_prior = torch.as_tensor(psi_prior - 1).view(-1, self.sK * self.sU).double()
@@ -528,13 +530,15 @@ class DawidSkeneIID(WorkerHandler):
             :param U:
             :return:
             """
-            # Compute Softmax (after unravelling psi and adding first dimension for sum along samples)
-            pi = tfunc.softmax(self.pi_star.view(-1, 1), dim=0)
-            psi = tfunc.softmax(self.psi_star.view(1, self.sZ, self.sK * self.sU), dim=2)
+            # Create Views
+            pi = self.pi.view(-1, 1)
+            psi = self.psi.view(1, self.sZ, self.sK * self.sU)
             U = U.view(len(U), 1, self.sK * self.sU)
 
             # Now generate likelihood,
-            log_likelihood = torch.log(torch.mm(torch.prod(torch.pow(psi, U), dim=2), pi)).sum() + torch.mul(self.pi_prior, pi).sum() + torch.mul(self.psi_prior, psi).sum()
+            log_likelihood = torch.log(torch.mm(torch.prod(torch.pow(psi, U), dim=2), pi)).sum() + \
+                             torch.mul(self.pi_prior, pi).sum() + torch.mul(self.psi_prior, psi).sum() - \
+                             self.pil * (self.pi.sum() - 1) - torch.mul(self.psil, (self.psi.sum(dim=2) - 1)).sum()
 
             # Return log_likelihood
             return log_likelihood
@@ -618,8 +622,7 @@ class DawidSkeneIID(WorkerHandler):
             converged = self._converged(loglikelihood, _common.tolerance)
 
             # Return Result
-            return DawidSkeneIID.ComputeResult_t(tfunc.softmax(model.pi_star, dim=0).detach().numpy(),
-                                                 tfunc.softmax(model.psi_star, dim=2).detach().numpy(), converged,
+            return DawidSkeneIID.ComputeResult_t(model.pi.detach().numpy(), model.psi.detach().numpy(), converged,
                                                  loglikelihood)
 
         @staticmethod
