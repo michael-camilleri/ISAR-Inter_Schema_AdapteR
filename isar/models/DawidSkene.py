@@ -34,12 +34,12 @@ class DawidSkeneIID(WorkerHandler):
     This Class implements the Noisy Annotator Model, following the Formulation of Dawid-Skene in an IID fashion.
     """
     DSIIDResult_t = namedtuple('DSIIDResult_t', ['Pi', 'Psi', 'Converged', 'Best', 'LLEvolutions'])
-    ComputeParams_t = namedtuple('ComputeParams_t', ['max_iter', 'tolerance', 'U', 'prior_pi', 'prior_psi'])
+    ComputeParams_t = namedtuple('ComputeParams_t', ['max_iter', 'tolerance', 'U', 'prior_pi', 'prior_psi', 'lr'])
     ComputeResult_t = namedtuple('ComputeResult_t', ['Pi', 'Psi', 'Converged', 'LLEvolutions'])
 
     # ========================== Initialisers ========================== #
     def __init__(self, dims, params=None, max_iter=100, tol=1e-4, n_jobs=-1, random_state=None, sink=None, optim='em',
-                 device='cpu'):
+                 device='cpu', lr=0.1):
         """
         Initialiser
 
@@ -58,6 +58,7 @@ class DawidSkeneIID(WorkerHandler):
         :param device:          Device to work with when running with auto-grad. Currently has no effect. Select from:
                                     'cpu': On CPU
                                     'cuda': On a GPU
+        :param lr:              Initial Learning Rate when doing Gradient Descent
         """
         # Call Super-Class
         super(DawidSkeneIID, self).__init__(n_jobs, sink)
@@ -69,6 +70,7 @@ class DawidSkeneIID(WorkerHandler):
         self.__toler = tol
         self.__optim = optim.lower()
         self.__device = device.lower()
+        self.__lr = lr
 
         # Prepare a valid probability for the model
         if params is None:
@@ -197,7 +199,7 @@ class DawidSkeneIID(WorkerHandler):
             self._print('Running {0} starts for (max) {1} iterations.'.format(num_work, self.__max_iter))
             self.start_timer('global')
             results = self.run_workers(num_work, self._EMWorker if self.__optim == 'em' else self._AGWorker,
-                                       _configs=self.ComputeParams_t(self.__max_iter, self.__toler, U, *priors),
+                                       _configs=self.ComputeParams_t(self.__max_iter, self.__toler, U, *priors, self.__lr),
                                        _args=starts)
             # Consolidate Data
             self.Pi = results.Pi
@@ -529,8 +531,8 @@ class DawidSkeneIID(WorkerHandler):
             :return:
             """
             # Compute Softmax (after unravelling psi and adding first dimension for sum along samples)
-            pi = tfunc.softmax(self.pi_star.view(-1, 1), dim=0)
-            psi = tfunc.softmax(self.psi_star.view(1, self.sZ, self.sK * self.sU), dim=2)
+            pi = tfunc.softmax(self.pi_star, dim=0).view(self.sZ, 1)
+            psi = tfunc.softmax(self.psi_star, dim=2).view(1, self.sZ, self.sK * self.sU)
             U = U.view(len(U), 1, self.sK * self.sU)
 
             # Now generate likelihood,
@@ -592,7 +594,7 @@ class DawidSkeneIID(WorkerHandler):
 
             # Create Model & Optimiser
             model = DawidSkeneIID._DSModel(_data[0], _data[1], _common.prior_pi, _common.prior_psi)
-            optim = Adam(model.parameters(), lr=0.1)
+            optim = Adam(model.parameters(), lr=_common.lr)
             U = torch.as_tensor(_common.U).double()
 
             # Start the Loop
