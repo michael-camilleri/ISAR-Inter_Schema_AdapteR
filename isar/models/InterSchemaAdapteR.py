@@ -197,8 +197,8 @@ class InterSchemaAdapteRIID(WorkerHandler):
         :param S: The Schema used by the Annotator [N by |K|] or [N] if S is common per annotator.
         :return:  The posterior over Z
         """
-        return self._EMWorker._compute_responsibilities(self._compute_omega_msg(self.Omega, Y, S),
-                                                        self.Pi, self.Psi).gamma
+        return self._EMWorker._compute_responsibilities(self._compute_omega_msg(self.Omega, Y, S), self.Pi,
+                                                        self.Psi).gamma
 
     def evidence_log_likelihood(self, Y, S, prior=None):
         """
