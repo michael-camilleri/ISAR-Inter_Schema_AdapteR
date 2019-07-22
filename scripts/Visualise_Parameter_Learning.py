@@ -69,38 +69,38 @@ if __name__ == '__main__':
 
     # ==== Now Plot ==== #
     # --- Plot All Together --- #
-    plt.figure(figsize=[10, 10])
+    plt.figure(figsize=[10, 7])
     # [A] - Plot
     plt.errorbar(Data_sizes.mean(axis=0), np.mean(rad_isar_pi, axis=0), yerr=np.std(rad_isar_pi, axis=0),
-                 label='$\Pi$ (ISAR)', linewidth=2.0, color='b', linestyle='-')
+                 label='$\Pi$ (ISAR)', linewidth=3.0, color='b', linestyle='-')
     plt.errorbar(Data_sizes.mean(axis=0), np.mean(rad_full_pi, axis=0), yerr=np.std(rad_full_pi, axis=0),
-                 label='$\Pi$ (Full)', linewidth=2.0, color='b', linestyle='--')
+                 label='$\Pi$ (Full)', linewidth=3.0, color='b', linestyle='--')
     plt.errorbar(Data_sizes.mean(axis=0), np.mean(rad_isar_psi, axis=0), yerr=np.std(rad_isar_psi, axis=0),
-                 label='$\Psi$ (ISAR)', linewidth=2.0, color='red', linestyle='-')
+                 label='$\Psi$ (ISAR)', linewidth=3.0, color='red', linestyle='-')
     plt.errorbar(Data_sizes.mean(axis=0), np.mean(rad_full_psi, axis=0), yerr=np.std(rad_full_psi, axis=0),
-                 label='$\Psi$ (Full)', linewidth=2.0, color='red', linestyle='--')
+                 label='$\Psi$ (Full)', linewidth=3.0, color='red', linestyle='--')
     # [B] - Improve Plot
-    plt.legend(fontsize=20)
-    plt.xlabel('Data-Set Size', fontsize=20)
-    plt.ylabel('% RAD', fontsize=20)
-    plt.tick_params(axis='both', which='major', labelsize=20)
+    plt.legend(fontsize=25)
+    plt.xlabel('Data-Set Size', fontsize=25)
+    plt.ylabel('% RAD', fontsize=25)
+    plt.tick_params(axis='both', which='major', labelsize=25)
     plt.grid(True, which='major', axis='both')
     plt.xscale('log')
     plt.ylim([0, 140])  # Set to 130 for Fig. 5
     plt.tight_layout(pad=0.2)
     # --- Will Plot Individually If requested --- #
     if args.independent:
-        plt.figure(figsize=[10, 10])
+        plt.figure(figsize=[10, 7])
         # [A] - Plot per Annotator
         for k in range(sK):
             plt.errorbar(Data_sizes.mean(axis=0), np.mean(rad_isar_psi_k[:, :, k], axis=0),
-                         yerr=np.std(rad_isar_psi_k[:, :, k], axis=0), label='$\Psi$ (A {})'.format(k), linewidth=2.0)
+                         yerr=np.std(rad_isar_psi_k[:, :, k], axis=0), label='$\Psi$ (A {})'.format(k), linewidth=3.0)
             print('Annotator {}: Psi={:.2f}%'.format(k, np.mean(rad_isar_psi_k[:, -1, k])))
         # [B] - Improve Plot
-        plt.legend(fontsize=20)
-        plt.xlabel('Number of samples used for training', fontsize=20)
-        plt.ylabel('% RAD', fontsize=20)
-        plt.tick_params(axis='both', which='major', labelsize=20)
+        plt.legend(fontsize=25)
+        plt.xlabel('Number of samples used for training', fontsize=25)
+        plt.ylabel('% RAD', fontsize=25)
+        plt.tick_params(axis='both', which='major', labelsize=25)
         plt.grid(True, which='major', axis='both')
         plt.xscale('log')
         plt.ylim([0, 130])
