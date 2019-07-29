@@ -62,6 +62,37 @@ class DawidSkeneIID(WorkerHandler):
         else:
             self.Pi, self.Psi = params
 
+    def sample(self, n_runs, n_times, nA, pA):
+        """
+        Sampler for the Model
+        :param n_runs:  Number of Runs to generate. Schemas/Annotators only vary between runs!
+        :param n_times: Length of each run
+        :param nA:      Number of Annotators to assign per Run: this allows leaving out certain annotators in runs.
+        :param pA:      Probability over Annotators.
+        :return:
+        """
+        # First Seed the random number generator
+        np.random.seed(self.__rand)
+
+        # Generate Z at one go
+        Z = np.random.choice(self.sZU, size=n_runs * n_times, p=self.Pi)  # Latent State
+
+        # With regards to the observations, have to do on a sample-by-sample basis.
+        A = np.empty([n_runs * n_times, nA], dtype=int)  # Annotator Selection Matrix
+        U = np.full([n_runs * n_times, self.sK], fill_value=np.NaN)
+
+        # Iterate over all segments
+        for n in range(n_runs):
+            # Pick Annotators for this segment
+            A[n * n_times:(n + 1) * n_times, :] = np.random.choice(self.sK, size=nA, replace=False, p=pA)
+            # Iterate over time-instances in this Segment
+            for nt in range(n * n_times, (n + 1) * n_times):
+                for k in A[nt]:  # Iterate over Annotators for this segment
+                    U[nt, k] = np.random.choice(self.sZU, p=self.Psi[Z[nt], k, :])  # Annotator Emission (confusion)
+
+        # Return Data
+        return Z, A, U
+
     def fit(self, U, z=None, priors=None, starts=1, return_diagnostics=False, learn_prior=True):
         """
         Fit the Parameters Pi/Psi to the data, in either a supervised or unsupervised manner.
