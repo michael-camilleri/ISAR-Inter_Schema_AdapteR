@@ -41,7 +41,7 @@ from isar.models import DawidSkeneIID, InterSchemaAdapteRIID
 # 5 - Biased (Unif)
 # Default Parameters
 DEFAULTS = \
-    {'Output': ['../data/Compare_DS', '../data/Compare_ISAR'],    # File-Names
+    {'Output': ['none', 'none', '../data/Compare_True'],    # File-Names # '../data/Compare_DS' '../data/Compare_ISAR'
      'Random': '0',                                               # Random Seed offset
      'Numbers': ['0', '20'],                                      # Range: start index, number of runs
      'Lengths': ['60', '5400'],                                   # Number and length of segments
@@ -53,17 +53,17 @@ DEFAULTS = \
 PDF_ANNOT = npext.sum_to_one([49, 31, 11, 4, 10, 25, 9, 7, 6, 3, 3])  # Probability over Annotators
 sK = len(PDF_ANNOT)
 sS = 4
-nA = 3              # Number of Annotators in any one sample
-DS, ISAR = (0, 1)   # Position (index) into arrays
+nA = 3                        # Number of Annotators in any one sample
+DS, ISAR, TRUTH = (0, 1, 2)   # Position (index) into arrays
 
 if __name__ == '__main__':
 
     # ==== Parse Arguments ==== #
     _arg_parse = argparse.ArgumentParser(description='Simulate and Train Annotator models (based on DS and ISAR)')
     _arg_parse.add_argument('-o', '--output', help='Output Result files, one each for the results from the DS (trained '
-                                                   'holistically) and ISAR models. Put "None" for any that you do not '
-                                                   'want to simulate. Defaults to {}'
-                            .format(DEFAULTS['Output']), default=DEFAULTS['Output'], nargs=2)
+                                                   'holistically), ISAR, and the Best (truth) scenario. Put "None" for '
+                                                   'any that you do not want to simulate. Defaults to {}'
+                            .format(DEFAULTS['Output']), default=DEFAULTS['Output'], nargs=3)
     _arg_parse.add_argument('-r', '--random', help='Seed (offset) for all Random States: ensures repeatibility. '
                                                    'Defaults to {}'.format(DEFAULTS['Random']),
                             default=DEFAULTS['Random'])
@@ -116,8 +116,7 @@ if __name__ == '__main__':
 
     # ==== Simulate (and Learn) Model(s) ==== #
     # ---- Prepare Placeholders ---- #
-    # Note that we use the same array for both: DS appears in the first, and ISAR in the second position. Also, we
-    #  compute both per-schema and global scores (after doing all folds)!
+    # Note that we compute both per-schema and global scores (after doing all folds)!
     if args.output[DS].lower() != 'none':
         pred_acc_DS = np.zeros([run_length, sS + 1], dtype=float)     # Array for Absolute Accuracy
         pred_wght_DS = np.zeros([run_length, sS + 1], dtype=float)    # Array for Predictive Log Probability
@@ -130,7 +129,13 @@ if __name__ == '__main__':
         pred_f1_ISAR = np.zeros([run_length, sS + 1], dtype=float)
     else:
         pred_acc_ISAR = None; pred_wght_ISAR = None; pred_f1_ISAR = None
-    run_sizes = np.zeros([run_length, sS], dtype=float)         # Number of Samples per Schema per Run
+    if args.output[TRUTH].lower() != 'none':
+        pred_acc_TR = np.zeros([run_length, sS + 1], dtype=float)   # Array for Absolute Accuracy
+        pred_wght_TR = np.zeros([run_length, sS + 1], dtype=float)  # Array for Predictive Log Probability
+        pred_f1_TR = np.zeros([run_length, sS + 1], dtype=float)    # F1-Score Array
+    else:
+        pred_acc_TR = None; pred_wght_TR = None; pred_f1_TR = None
+    run_sizes = np.zeros([run_length, sS], dtype=float)             # Number of Samples per Schema per Run
 
     # --- Iterate over Runs ---- #
     for run in range(run_offset, run_offset + run_length):
@@ -224,9 +229,40 @@ if __name__ == '__main__':
             pred_wght_DS[run, -1] = np.log(z_log_cposter).mean()
             pred_f1_DS[run, -1] = f1_score(Z, z_predictions, labels=np.arange(sZ), average='macro')
 
+        # [D] - Using True parameters from the sampler, predict:
+        if args.output[TRUTH].lower() != 'none':
+            print('Evaluating True Model Performance')
+            # Prepare some placeholders for the scores
+            z_predictions = np.empty_like(Z)
+            z_log_cposter = np.empty_like(Z, dtype=float)
+            for fold in range(sF):  # Iterate over folds
+                print(' ---> Fold {}'.format(fold))
+                # Split Training/Testing Sets
+                valid_idcs = np.equal(F, fold)
+                Y_valid = Y[valid_idcs]
+                S_valid = S[valid_idcs]
+                Z_valid = Z[valid_idcs]
+                # Validate Model
+                z_posterior = sampler.predict_proba(Y_valid, S_valid)
+                z_predictions[valid_idcs] = np.argmax(z_posterior, axis=-1)
+                z_log_cposter[valid_idcs] = z_posterior[np.arange(len(Z_valid)), Z_valid]
+            # Now Store Values
+            for s in range(sS):
+                schema_idcs = np.equal(S, s)
+                pred_acc_TR[run, s] = accuracy_score(Z[schema_idcs], z_predictions[schema_idcs])
+                pred_wght_TR[run, s] = np.log(z_log_cposter[schema_idcs]).mean()
+                pred_f1_TR[run, s] = f1_score(Z[schema_idcs], z_predictions[schema_idcs], labels=np.arange(sZ),
+                                                average='macro')
+            # And Globals
+            pred_acc_TR[run, -1] = accuracy_score(Z, z_predictions)
+            pred_wght_TR[run, -1] = np.log(z_log_cposter).mean()
+            pred_f1_TR[run, -1] = f1_score(Z, z_predictions, labels=np.arange(sZ), average='macro')
+
     # ===== Finally store the results to File: ===== #
     print('Storing Results to file ... ')
     if args.output[DS].lower() != 'none':
         np.savez_compressed(args.output[DS], accuracy=pred_acc_DS, f1=pred_f1_DS, log_loss=-pred_wght_DS)
     if args.output[ISAR].lower() != 'none':
         np.savez_compressed(args.output[ISAR], accuracy=pred_acc_ISAR, f1=pred_f1_ISAR, log_loss=-pred_wght_ISAR)
+    if args.output[TRUTH].lower() != 'none':
+        np.savez_compressed(args.output[TRUTH], accuracy=pred_acc_TR, f1=pred_f1_TR, log_loss=-pred_wght_TR)
