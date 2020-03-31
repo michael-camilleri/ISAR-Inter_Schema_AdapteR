@@ -23,8 +23,6 @@ import numpy as np
 import time as tm
 import warnings
 
-MAX_MEMORY = 200000
-
 
 class InterSchemaAdapteRIID(WorkerHandler):
     """
@@ -38,7 +36,8 @@ class InterSchemaAdapteRIID(WorkerHandler):
     ISARIIDResult_t = namedtuple('ISARIIDResults_t', ['Pi', 'Psi', 'Converged', 'Best', 'LLEvolutions'])
 
     # ========================== Initialisers ========================== #
-    def __init__(self, dims, omega, params=None, max_iter=100, tol=1e-4, n_jobs=-1, random_state=None, sink=None):
+    def __init__(self, dims, omega, params=None, max_iter=100, tol=1e-4, n_jobs=-1, max_mem=200000, random_state=None,
+                 sink=None):
         """
         Initialiser
 
@@ -48,6 +47,8 @@ class InterSchemaAdapteRIID(WorkerHandler):
         :param max_iter:        Maximum number of iterations in EM computation
         :param tol:             Tolerance for convergence in EM Computation
         :param n_jobs:          Number of jobs: see documentation for mpctools.WorkerHandler
+        :param max_mem:         Maximum Memory to execute with (number of samples). When using multiprocessing, this
+                                will be divided by the number of jobs to prevent issues.
         :param random_state:    If set, ensures reproducible results
         :param sink:            For debugging, outputs progress etc..
         """
@@ -60,6 +61,8 @@ class InterSchemaAdapteRIID(WorkerHandler):
         self.__rand = random_state if random_state is not None else int(tm.time())
         self.__max_iter = max_iter
         self.__toler = tol
+        self.__max_mem = max_mem
+        self.__jobs = max(1, n_jobs) # Keep track of whether we are doing multiprocessing or just threading!
 
         # Now the Parameters
         self.Omega = omega
@@ -161,7 +164,8 @@ class InterSchemaAdapteRIID(WorkerHandler):
         results = self.run_workers(num_work, self._EMWorker,
                                    _configs=self._EMWorker.ComputeParams_t(max_iter=self.__max_iter,
                                                                            tolerance=self.__toler, m_omega=_M_Omega,
-                                                                           prior_pi=priors[0], prior_psi=priors[1]),
+                                                                           prior_pi=priors[0], prior_psi=priors[1],
+                                                                           mem=self.__jobs),
                                    _args=starts)
         self.stop_timer('em')
         self.Pi = results.Pi
@@ -186,7 +190,8 @@ class InterSchemaAdapteRIID(WorkerHandler):
         :param S: The Schema used by the Annotator [N by |K|] or [N] if S is common per annotator.
         :return:  The predictions over Z
         """
-        msg = self._EMWorker._compute_responsibilities(self._compute_omega_msg(self.Omega, Y, S), self.Pi, self.Psi)
+        msg = self._EMWorker._compute_responsibilities(self._compute_omega_msg(self.Omega, Y, S), self.Pi, self.Psi,
+                                                       self.__max_mem)
         return np.argmax(msg.gamma, axis=1)
 
     def predict_proba(self, Y, S):
@@ -195,10 +200,10 @@ class InterSchemaAdapteRIID(WorkerHandler):
 
         :param Y: Annotator Labels: np.NaN if unlabelled [N by |K|]
         :param S: The Schema used by the Annotator [N by |K|] or [N] if S is common per annotator.
-        :return:  The posterior over Z
+        :return:  The posterior over Z (N by |Z|)
         """
-        return self._EMWorker._compute_responsibilities(self._compute_omega_msg(self.Omega, Y, S),
-                                                        self.Pi, self.Psi).gamma
+        return self._EMWorker._compute_responsibilities(self._compute_omega_msg(self.Omega, Y, S), self.Pi,
+                                                        self.Psi, self.__max_mem).gamma
 
     def evidence_log_likelihood(self, Y, S, prior=None):
         """
@@ -212,9 +217,9 @@ class InterSchemaAdapteRIID(WorkerHandler):
         m_omega = self._compute_omega_msg(self.Omega, Y, S)
         if prior is not None:
             return npext.Dirichlet(prior[0]).logsumpdf(self.Pi) + npext.Dirichlet(prior[1]).logsumpdf(self.Psi) + \
-                   self._EMWorker._compute_responsibilities(m_omega, self.Pi, self.Psi).log_likelihood
+                   self._EMWorker._compute_responsibilities(m_omega, self.Pi, self.Psi, self.__max_mem).log_likelihood
         else:
-            return self._EMWorker._compute_responsibilities(m_omega, self.Pi, self.Psi).log_likelihood
+            return self._EMWorker._compute_responsibilities(m_omega, self.Pi, self.Psi, self.__max_mem).log_likelihood
 
     def _aggregate_results(self, results):
         """
@@ -393,7 +398,8 @@ class InterSchemaAdapteRIID(WorkerHandler):
         (Private) Nested class for running the EM Algorithm
         """
         # Definition of Named Data-Types
-        ComputeParams_t = namedtuple('ComputeParams_t', ['max_iter', 'tolerance', 'm_omega', 'prior_pi', 'prior_psi'])
+        ComputeParams_t = namedtuple('ComputeParams_t', ['max_iter', 'tolerance', 'm_omega', 'prior_pi', 'prior_psi',
+                                                         'mem'])
         Responsibilities_t = namedtuple('Responsibilities_t', ['gamma', 'rho_sum', 'log_likelihood'])
         ComputeResult_t = namedtuple('ComputeResult_t', ['Pi', 'Psi', 'Converged', 'LLEvolutions'])
 
@@ -448,15 +454,13 @@ class InterSchemaAdapteRIID(WorkerHandler):
             while iterations < _common.max_iter:
                 # -------------- E-Step: -------------- #
                 # ++++ Compute Responsibilities ++++ #
-                msg = self._compute_responsibilities(_common.m_omega, pi, psi)
+                msg = self._compute_responsibilities(_common.m_omega, pi, psi, _common.mem)
                 # ++++ Now compute log-likelihood ++++ #
                 loglikelihood.append(pi_dir.logpdf(pi) + np.sum(psi_dir.logpdf(psi)) + msg.log_likelihood)
-
                 # --------- Likelihood-Check: --------- #
                 # Check for convergence!
                 if self._converged(loglikelihood, _common.tolerance):
                     break
-
                 # -------------- M-Step: -------------- #
                 # Now Compute Pi
                 pi = npext.sum_to_one(np.sum(msg.gamma, axis=0).squeeze() + (_common.prior_pi - 1), axis=-1)
@@ -475,13 +479,14 @@ class InterSchemaAdapteRIID(WorkerHandler):
             return self.ComputeResult_t(Pi=pi, Psi=psi, Converged=converged, LLEvolutions=loglikelihood)
 
         @staticmethod
-        def _compute_responsibilities(m_omega: np.ndarray, pi, psi):
+        def _compute_responsibilities(m_omega: np.ndarray, pi, psi, mm):
             """
             Compute the Responsibilities and subsequently the Log-Likelihood
 
             :param m_omega: Omega Message
             :param pi:      Latent Probabilities
             :param psi:     Emission Probabilities
+            :param mm:      Maximum Memory to operate with
             :return:        Responsibilities_t Named Tuple
             """
             # ---- Define the Sizes we will work with ---- #
@@ -499,25 +504,20 @@ class InterSchemaAdapteRIID(WorkerHandler):
             cN = 0
             while cN < sN:
                 # ++++ Identify indices to work with ++++ #
-                max_idx = min(cN + MAX_MEMORY, sN)
+                max_idx = min(cN + mm, sN)
                 omega_subset = m_omega[cN:max_idx, np.newaxis, :, :]
-
                 # ++++ Compute Messages ++++ #
                 m_omega_star = np.multiply(omega_subset, psi)  # [N, |Z|, K, |U|]
                 m_omega_star_sum_u = np.sum(m_omega_star, axis=3, keepdims=True)  # [N, |Z|, K,  1 ]
                 m_psi_pi = np.multiply(np.prod(m_omega_star_sum_u, axis=2, keepdims=True), pi)  # [N, |Z|, 1,  1 ]
                 m_psi_pi_sum_z = np.sum(m_psi_pi, axis=1, keepdims=True)  # [N,  1,  1,  1 ]
-
                 # ++++ Update Gamma ++++ #
                 gamma_subset = np.divide(m_psi_pi, m_psi_pi_sum_z)
                 gamma[cN:max_idx, :] = gamma_subset.squeeze()
-
                 # ++++ Update Rho_sum ++++ #
                 rho_sum += np.multiply(np.divide(gamma_subset, m_omega_star_sum_u), m_omega_star).sum(axis=0)
-
                 # ++++ Update Log-Likelihood ++++ #
                 log_likelihood += np.sum(np.log(m_psi_pi_sum_z))
-
                 # ++++ Update Indexing ++++ #
                 cN = max_idx
 

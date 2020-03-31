@@ -137,7 +137,7 @@ if __name__ == '__main__':
         print('Executing Simulation Run: {} ...'.format(run))
 
         # Seed with Random Offset + run value
-        np.random.seed()
+        np.random.seed(args.random + run)
 
         # [A] - Generate Data
         print(' - Generating Data:')

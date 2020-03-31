@@ -1,7 +1,7 @@
 # ISAR (Inter-Schema AdapteR)
 
 This repository contains python code for replicating the Results in the Paper:
-> "The Extended Dawid-Skene Model: Fusing Information from Multiple Data Schemas", Under Review at the ECMLPKDD Workshop on Automating Data Science
+> Michael P.J. Camilleri and Christopher K. I. Williams, "The Extended Dawid-Skene Model: Fusing Information from Multiple Data Schemas", Springer Series on Machine Learning and Knowledge Discovery in Databases (Proceedings of the 2019 ECML PKDD Workshop on Automating Data Science), (2020)
 
 as well as the Extended Dawid-Skene model defined therein to fuse information from multiple annotators labelling under different schemas. 
 If you find the code useful in any of your projects, please consider citing the above paper.
@@ -68,7 +68,7 @@ If you just want to replicate the results in the paper and that is all that is r
 project we provide a setup script for installing it. Again, this is as simple as running the provided `setup.py` script:
   ```bash
   python setup.py sdist --format=tar
-  pip install dist/isar-1.0.0.tar
+  pip install dist/isar-1.0.1.tar
   ```
 
 ## Replicating the Results

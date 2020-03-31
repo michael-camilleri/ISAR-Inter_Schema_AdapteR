@@ -2,7 +2,7 @@
 This Script may be used to train the DS and ISAR models on the real data. Due to the nature of our collaboration with
 MRC Harwell, we are not allowed to post the data publicly: however, we release the code for posterity.
 
-The Dataset is assumed to be stored as a MessagePack Pandas DataFrame. The index columns are:
+The Dataset is assumed to be stored as a Pandas DataFrame (Pickled, with bz2 compression). The index columns are:
  * The Fold Index (Letters, A through K)
  * The Run Number: This splits the samples into contiguous runs
  * The Mouse Identifier (RFID)
@@ -74,7 +74,7 @@ if __name__ == '__main__':
 
     # ==== Read and Prepare the DataSet/Values ==== #
     print('Loading Data...')
-    df = pd.read_msgpack(args.inputs)[['Schema', 'Segment', *ANNOTATORS]]
+    df = pd.read_pickle(args.inputs, compression='bz2')[['Schema', 'Segment', *ANNOTATORS]]
     segments = sorted(df['Segment'].unique().tolist())
     folds = set(df.index.get_level_values(0))
     with np.load('../data/model.mrc.npz') as _data:

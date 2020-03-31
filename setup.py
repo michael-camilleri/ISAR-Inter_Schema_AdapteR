@@ -3,7 +3,7 @@ from setuptools import setup
 setup(
     # Common Setup
     name="isar",
-    version="1.0.0",
+    version="1.0.1",
     packages=['isar.models'],
 
     # Requirements
