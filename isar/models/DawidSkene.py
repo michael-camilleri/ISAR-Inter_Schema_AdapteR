@@ -233,48 +233,6 @@ class DawidSkeneIID(WorkerHandler):
         # Return Results in Dictionary:
         return self.DSIIDResult_t(_best_pi, _best_psi, _converged, _best_index, _evol_llikel)
 
-    # @staticmethod
-    # def optimise_permutations(_map, _raw, _pi, _psi, _labels):
-    #     """
-    #     Optimise the permutation of the latent states (_map) such that there is least error (confusion matrix, highest
-    #     agreement) with the raw data.
-    #
-    #     Note:
-    #         * Method can handle disjoing label-_sets (through _labels) BUT they must be the same for _map and _raw
-    #         * Method ignores NaN values in _raw (i.e. these do not contribute towards count)
-    #
-    #     :param _map:    MAP Estimates of the data [N]
-    #     :param _raw:    Raw (floating point Numpy Array) data [N by K]
-    #     :param _pi:     Pi Vector (to permute)
-    #     :param _psi:    Psi Vector (to permute)
-    #     :param _labels: Label-Set (for both)
-    #     :return: Tuple containing in order:
-    #                     * Updated Pi
-    #                     * Updated Psi
-    #                     * Updated MAP Predictions
-    #     """
-    #     # Get # Annotators
-    #     _K = _raw.shape[1]
-    #
-    #     # Prepare Data
-    #     _observed = _raw.astype(np.float).T.ravel() # Flatten out all annotators
-    #     _valid = np.isfinite(_observed)             # Find out only those which have been labelled.
-    #     _observed = _observed[_valid]               # Valid Observed
-    #     _predicted = np.tile(_map, _K)[_valid]      # Valid Predicted
-    #
-    #     # Compute Confusion Matrix
-    #     _confusion = confusion_matrix(_observed, _predicted, labels=_labels)
-    #
-    #     # Now Perform Hungarian Algorithm: we need to use the Transpose, since we want to find the row each map value
-    #     #   should be assigned to.
-    #     _best_permute, _ = npext.maximise_trace(_confusion.T)
-    #
-    #     # Finally, update Parameters
-    #     _pi[list(_best_permute)] = _pi.copy()
-    #     _psi[list(_best_permute)] = _psi.copy()
-    #     _best_labels = _labels[_best_permute]
-    #     return _pi, _psi, npext.value_map(_map, _best_labels, _labels), _best_permute
-
     # ========================== Private Nested Implementations ========================== #
     class _EMWorker(IWorker):
         """
@@ -324,7 +282,6 @@ class DawidSkeneIID(WorkerHandler):
 
             # Initialise Random Points (start)
             pi, psi = _data
-            sZ, sK, sU = psi.shape
 
             # Initialise Dirichlets
             pi_dir = npext.Dirichlet(_common.prior_pi)
