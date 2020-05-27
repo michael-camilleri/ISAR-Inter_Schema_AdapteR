@@ -1,3 +1,8 @@
 # Pip-Based Requirements File. Install with:
 #   `pip install -r pip.req`
+scikit-learn=0.20.2
+matplotlib=3.0.2
 pathos==0.2.3
+pandas=0.24.1
+numpy=1.16.2
+numba=0.43.1
