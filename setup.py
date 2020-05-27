@@ -7,7 +7,7 @@ setup(
     packages=['isar.models'],
 
     # Requirements
-    install_requires=['numpy', 'mpctools', 'scikit-learn', 'matplotlib', 'numba', 'pandas'],
+    install_requires=['numpy', 'mpctools', 'scikit-learn', 'numba', 'pandas'],
 
     # Meta-Data
     author='Michael P. J. Camilleri',
