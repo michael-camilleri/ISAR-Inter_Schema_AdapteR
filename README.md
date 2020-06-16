@@ -3,9 +3,9 @@
 This repository contains python code for replicating the Results in the Paper:
 > Michael P.J. Camilleri and Christopher K. I. Williams, "The Extended Dawid-Skene Model: Fusing Information from Multiple Data Schemas", Springer Series on Machine Learning and Knowledge Discovery in Databases (Proceedings of the 2019 ECML PKDD Workshop on Automating Data Science), (2020)
 
-as well as the Extended Dawid-Skene model defined therein to fuse information from multiple annotators labelling under different schemas. 
+as well as the Extended Dawid-Skene model defined therein to fuse information from multiple annotators labelling under different schemas.
 If you find the code useful in any of your projects, please consider citing the above paper.
- 
+
 **Due to the nature of our collaboration with MRC Harwell, we can only provide the data for the simulation components of the study: we do however provide the code to replicate all results.**
 
 ## Contents
@@ -16,60 +16,39 @@ If you find the code useful in any of your projects, please consider citing the 
 
 ## Repository Structure
 
-At the top level, there are two `requirements` files, for easy installation of the necessary packages (except for the custom mpctools library: instructions for this are provided below). 
+At the top level, there are two `requirements` files, for easy installation of the necessary packages (except for the custom mpctools library: instructions for this are provided below).
 There are 3 high-level directories:
  * **isar**: Contains the classes implementing the two models in our paper, the baseline DS and Extended DS using our ISAR adapter, under the `models` package.
  * **scripts**: Contains the scripts for replicating the results in the paper.
  * **data**: Directory which at the outset contains the parameters for the MRC-Harwell-trained models which form the basis of our simulations. This is also the default directory for storing results from simulation runs (but can be configured, see below).
- 
+
 In general, the replication scripts are split into two stages: one for simulating/training the models, and the other for visualising results.
 
 ## Installation and Setting Up
 
-The repository is designed to be a self-contained implementation, subject to some standard library requirements
+The repository is designed to be a self-contained implementation, subject to some standard library requirements.
+
+### Python Version
+The code is designed to be run with Python 3 and will not work with Python 2. It is recommended to set up a python virtual environment (example using [Conda](https://conda.io/en/latest/)). The code was tested and runs with Python 3.6.
 
 ### Requirements
+The models require the use of the following libraries: `scikit-learn`, `mpctools`, `pandas`, `numpy` and `numba`. In addition, visualising some of the results requires `matplotlib`.
 
-The code is designed to be run with Python 3 and will not work with Python 2. It is recommended to set up a python 
-virtual environment (example using [Conda](https://conda.io/en/latest/)). The code was tested and runs with Python 3.6.
+### Installation
+There are two ways to install and use the repository. In each case, start by downloading or cloning the repository.
 
-The code also makes use of the following libraries: for simplicity, we provide conda and pip requirements file for 
-automatically installing the specified version of the library to guarantee compatibility:
- * scikit-learn
- * matplotlib
- * *pathos*
- * pandas
- * numpy
- * numba
- 
-All the above, apart from *pathos* are available through conda: pathos needs to be installed through pip (all 
-instructions given below). We also use our own externally packaged `mpctools` library. Instructions are provided below for setting it up.
+#### Installation for Replication
+If you simply wish to replicate the results and/or play around with the models in a limited setting, then you can simply install the dependencies and you are up and running. We provide a requirements file for doing this:
+   ```bash
+   pip install -r pip.req
+   ```
 
-### Installation Procedure
+#### Installation for General Usage
+If however you wish to make use of the isar modules in another project we provide a setup script for installing it. The setup will also install any library dependencies (note that this does not include `matplotlib` which is only required for visualising results):
+   ```bash
+   python setup.py install
+   ```
 
-1. Download or clone this repository
-1. From the command line, change to the location of the repository contents, or open a terminal directory in the location.
-1. Install conda-based requirements:
-  ```bash
-  conda install --file conda.req
-  ```
-1. Install pip-based requirements (the `pathos` library is not available under conda)
-  ```bash
-  pip install -r pip.req
-  ```
-1. Download the mpctools library from https://github.com/michael-camilleri/mpctools and install (from within the top-level directory):
-  ```bash
-  python setup.py sdist --format=tar
-  pip install dist/mpctools-<version>.tar
-  ```
-  (replace `<version>` with the correct version).
-
-If you just want to replicate the results in the paper and that is all that is required. If however you wish to make use of the isar modules in another
-project we provide a setup script for installing it. Again, this is as simple as running the provided `setup.py` script:
-  ```bash
-  python setup.py sdist --format=tar
-  pip install dist/isar-1.0.1.tar
-  ```
 
 ## Replicating the Results
 
