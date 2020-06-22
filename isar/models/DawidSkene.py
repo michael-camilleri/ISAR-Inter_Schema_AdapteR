@@ -27,23 +27,36 @@ import copy
 
 class DawidSkeneIID(WorkerHandler):
     """
-    This Class implements the Noisy Annotator Model, following the Formulation of Dawid-Skene in an IID fashion.
+    This Class implements the Noisy Annotator Model, following the Formulation of Dawid-Skene in an
+    IID fashion.
     """
-    DSIIDResult_t = namedtuple('DSIIDResult_t', ['Pi', 'Psi', 'Converged', 'Best', 'LLEvolutions'])
 
-    # ========================== Initialisers ========================== #
-    def __init__(self, dims, params=None, max_iter=100, tol=1e-4, n_jobs=-1, random_state=None, sink=None):
+    DSIIDResult_t = namedtuple("DSIIDResult_t", ["Pi", "Psi", "Converged", "Best", "LLEvolutions"])
+
+    def __init__(
+        self,
+        dims,
+        params=None,
+        max_iter=100,
+        converge_tol=1e-4,
+        predict_tol=0.0,
+        n_jobs=-1,
+        random_state=None,
+        sink=None,
+    ):
         """
-        Initialiser
+        Initialises the Model
 
-        :param dims:            The Dimensions of the Model, basically Z/U, K (See Paper: We assume Z == U)
-        :param params:          If not None, specifies a value for the parameters: otherwise, these are initialised to
-                                completely perfect distributions (i.e. perfect annotators)
-        :param max_iter:        Maximum number of iterations in EM computation
-        :param tol:             Tolerance for convergence in EM Computation
-        :param n_jobs:          Number of jobs: see documentation for mpctools.WorkerHandler
-        :param random_state:    If set, ensures reproducible results
-        :param sink:            For debugging, outputs progress etc..
+        :param dims: The Dimensions of the Model, basically Z/U, K (See Paper: We assume Z == U)
+        :param params: If not None, specifies a value for the parameters: otherwise, these are
+                       initialised to completely perfect distributions (i.e. perfect annotators)
+        :param max_iter: Maximum number of iterations in EM computation
+        :param converge_tol: Tolerance for convergence in EM Computation
+        :param predict_tol: Tolerance when computing predictions: if less than this, will not
+                       return a prediction (np.NaN). By default, this is disabled (set to 0)
+        :param n_jobs: Number of jobs: see documentation for mpctools.WorkerHandler
+        :param random_state: If set, ensures reproducible results
+        :param sink: For debugging, outputs progress etc..
         """
 
         # Call Super-Class
@@ -53,11 +66,12 @@ class DawidSkeneIID(WorkerHandler):
         self.sZU, self.sK = dims
         self.__rand = random_state if random_state is not None else int(tm.time())
         self.__max_iter = max_iter
-        self.__toler = tol
+        self.__conv_toler = converge_tol
+        self.__pred_toler = predict_tol
 
         # Prepare a valid probability for the model
         if params is None:
-            self.Pi = np.full(self.sZU, 1/self.sZU)
+            self.Pi = np.full(self.sZU, 1 / self.sZU)
             self.Psi = np.tile(np.eye(self.sZU)[:, np.newaxis, :], [1, self.sK, 1])
         else:
             self.Pi, self.Psi = params
@@ -84,11 +98,15 @@ class DawidSkeneIID(WorkerHandler):
         # Iterate over all segments
         for n in range(n_runs):
             # Pick Annotators for this segment
-            A[n * n_times:(n + 1) * n_times, :] = np.random.choice(self.sK, size=nA, replace=False, p=pA)
+            A[n * n_times : (n + 1) * n_times, :] = np.random.choice(
+                self.sK, size=nA, replace=False, p=pA
+            )
             # Iterate over time-instances in this Segment
             for nt in range(n * n_times, (n + 1) * n_times):
                 for k in A[nt]:  # Iterate over Annotators for this segment
-                    U[nt, k] = np.random.choice(self.sZU, p=self.Psi[Z[nt], k, :])  # Annotator Emission (confusion)
+                    U[nt, k] = np.random.choice(
+                        self.sZU, p=self.Psi[Z[nt], k, :]
+                    )  # Annotator Emission (confusion)
 
         # Return Data
         return Z, A, U
@@ -120,11 +138,11 @@ class DawidSkeneIID(WorkerHandler):
         # Branch based on whether we are doing this in a supervised or unsupervised fashion.
         if z is not None:
             # --- Indicate branch --- #
-            self._print('Fitting DS Model in a supervised fashion.')
+            self._print("Fitting DS Model in a supervised fashion.")
 
             # --- Handle Prior Smoothing --- #
             if priors is None:
-                assert learn_prior is True, 'If Not Learning Prior, then you must define the Priors'
+                assert learn_prior is True, "If Not Learning Prior, then you must define the Priors"
                 self.Pi = np.zeros_like(self.Pi)
                 self.Psi = np.zeros_like(self.Psi)
             else:
@@ -134,7 +152,9 @@ class DawidSkeneIID(WorkerHandler):
             # --- Construct prior on z: --- #
             #  --- Note, that if not specified, then prior
             if learn_prior:
-                val, cnts = np.unique(z.astype(int), return_counts=True)  # Guard against some values not appearing!
+                val, cnts = np.unique(
+                    z.astype(int), return_counts=True
+                )  # Guard against some values not appearing!
                 self.Pi[val] += cnts
             self.Pi = npext.sum_to_one(self.Pi)
 
@@ -143,7 +163,9 @@ class DawidSkeneIID(WorkerHandler):
                 # Mask against NaN
                 valid_u = ~np.isnan(U[:, k])
                 if np.any(valid_u):
-                    self.Psi[:, k, :] += confusion_matrix(z[valid_u], U[valid_u, k], labels=np.arange(len(self.Pi)))
+                    self.Psi[:, k, :] += confusion_matrix(
+                        z[valid_u], U[valid_u, k], labels=np.arange(len(self.Pi))
+                    )
                 # Otherwise, will just retain prior
             self.Psi = npext.sum_to_one(self.Psi, axis=-1)
 
@@ -152,7 +174,7 @@ class DawidSkeneIID(WorkerHandler):
 
         else:
             # --- Indicate branch --- #
-            self._print('Fitting DS Model using Expectation Maximisation')
+            self._print("Fitting DS Model using Expectation Maximisation")
 
             # --- Handle Priors first --- #
             if priors is None:
@@ -160,28 +182,40 @@ class DawidSkeneIID(WorkerHandler):
 
             # --- Now Handle Starting Points --- #
             np.random.seed(self.__rand)
-            if hasattr(starts, '__len__'):
+            if hasattr(starts, "__len__"):
                 num_work = len(starts)
             else:
                 num_work = starts
-                starts = [(npext.Dirichlet(priors[0]).sample(), npext.Dirichlet(priors[1]).sample())
-                          for _ in range(num_work)]
+                starts = [
+                    (npext.Dirichlet(priors[0]).sample(), npext.Dirichlet(priors[1]).sample())
+                    for _ in range(num_work)
+                ]
 
             # Perform EM (and format output)
-            self._print('Running {0} starts for (max) {1} iterations.'.format(num_work, self.__max_iter))
-            self.start_timer('global')
-            results = self.run_workers(num_work, self._EMWorker,
-                                       _configs=self._EMWorker.ComputeParams_t(self.__max_iter, self.__toler, U, *priors),
-                                       _args=starts)
+            self._print(
+                "Running {0} starts for (max) {1} iterations.".format(num_work, self.__max_iter)
+            )
+            self.start_timer("global")
+            results = self.run_workers(
+                num_work,
+                self._EMWorker,
+                _configs=self._EMWorker.ComputeParams_t(
+                    self.__max_iter, self.__conv_toler, U, *priors
+                ),
+                _args=starts,
+            )
             # Consolidate Data
             self.Pi = results.Pi
             self.Psi = results.Psi
             # Stop Main timer
-            self.stop_timer('global')
+            self.stop_timer("global")
 
             # Display some statistics
-            self._write('DS Model was fit in {0:1.5f}s ({1:1.5f}s/run):\n'.format(self.elapsed('global'),
-                                                                                  self.elapsed('global')/num_work))
+            self._write(
+                "DS Model was fit in {0:1.5f}s ({1:1.5f}s/run):\n".format(
+                    self.elapsed("global"), self.elapsed("global") / num_work
+                )
+            )
 
             # Build (and return) Information Structure
             return (self, results) if return_diagnostics else self
@@ -196,19 +230,26 @@ class DawidSkeneIID(WorkerHandler):
         :return:        Log-Likelihood
         """
         if prior is not None:
-            return npext.Dirichlet(prior[0]).logsumpdf(self.Pi) + npext.Dirichlet(prior[1]).logsumpdf(self.Psi) + \
-                   self._EMWorker._compute_responsibilities(U, self.Pi, self.Psi).log_likelihood
+            return (
+                npext.Dirichlet(prior[0]).logsumpdf(self.Pi)
+                + npext.Dirichlet(prior[1]).logsumpdf(self.Psi)
+                + self._EMWorker._compute_responsibilities(U, self.Pi, self.Psi).log_likelihood
+            )
         else:
             return self._EMWorker._compute_responsibilities(U, self.Pi, self.Psi).log_likelihood
 
     def predict(self, U):
         """
-        Predict the latent state Z given the observations
+        Predict the latent state Z given the observations. Note that because of the prediction
+        tolerance, the returned values are float.
 
         :param U:  Observations: Size N by K (of domain |U| with missing data as NaN)
         :return:   Predictions over the latent states
         """
-        return np.argmax(self._EMWorker._compute_responsibilities(U, self.Pi, self.Psi).gamma, axis=-1)
+        resp = self._EMWorker._compute_responsibilities(U, self.Pi, self.Psi).gamma
+        pred = np.argmax(resp, axis=-1).astype(float)
+        pred[resp[np.arange(U.shape[0]), pred.astype(int)] < self.__pred_toler] = np.NaN
+        return pred
 
     def predict_proba(self, U):
         """
@@ -229,11 +270,11 @@ class DawidSkeneIID(WorkerHandler):
         """
 
         # Initialise Placeholders
-        _final_pis  = []  # Final Pi for each EM run
+        _final_pis = []  # Final Pi for each EM run
         _final_psis = []  # Final Psi for each EM run
         _final_llik = []  # Final Likelihood, for each EM run
-        _converged  = []  # Whether the run converged:
-        _evol_llikel = [] # Evolutons of log-likelihoods
+        _converged = []  # Whether the run converged:
+        _evol_llikel = []  # Evolutons of log-likelihoods
 
         # Iterate over results from each worker:
         for result in results:
@@ -252,7 +293,7 @@ class DawidSkeneIID(WorkerHandler):
         if np.any(_converged):
             _masked_likelihood = np.ma.masked_array(_final_llik, np.logical_not(_converged))
         else:
-            warnings.warn('None of the Runs Converged: results may be incomplete')
+            warnings.warn("None of the Runs Converged: results may be incomplete")
             _masked_likelihood = _final_llik
 
         # Find the best one out of those converged, or out of all, if none converged
@@ -271,9 +312,12 @@ class DawidSkeneIID(WorkerHandler):
 
         Note that in this case, the index order is n,z,k,u (i.e. Sample, Latent, Annotator, Label)
         """
-        ComputeParams_t = namedtuple('ComputeParams_t', ['max_iter', 'tolerance', 'U', 'prior_pi', 'prior_psi'])
-        Responsibilities_t = namedtuple('Responsibilities_t', ['gamma', 'log_likelihood'])
-        ComputeResult_t = namedtuple('ComputeResult_t', ['Pi', 'Psi', 'Converged', 'LLEvolutions'])
+
+        ComputeParams_t = namedtuple(
+            "ComputeParams_t", ["max_iter", "tolerance", "U", "prior_pi", "prior_psi"]
+        )
+        Responsibilities_t = namedtuple("Responsibilities_t", ["gamma", "log_likelihood"])
+        ComputeResult_t = namedtuple("ComputeResult_t", ["Pi", "Psi", "Converged", "LLEvolutions"])
 
         def __init__(self, _id, _handler):
             """
@@ -329,7 +373,9 @@ class DawidSkeneIID(WorkerHandler):
                 # Pre-Allocate Gamma
                 msg = self._compute_responsibilities(_common.U, pi, psi)
                 # ++++ Now compute log-likelihood ++++ #
-                loglikelihood.append(pi_dir.logpdf(pi) + psi_dir.logsumpdf(psi) + msg.log_likelihood)
+                loglikelihood.append(
+                    pi_dir.logpdf(pi) + psi_dir.logsumpdf(psi) + msg.log_likelihood
+                )
 
                 # --------- Likelihood-Check: --------- #
                 # Check for convergence!
@@ -389,12 +435,15 @@ class DawidSkeneIID(WorkerHandler):
             if len(likelihoods) < 2:
                 return False
             elif likelihoods[-1] < likelihoods[-2]:
-                warnings.warn('Drop in Log-Likelihood Observed! Results are probably wrong.')
+                warnings.warn("Drop in Log-Likelihood Observed! Results are probably wrong.")
             else:
                 return abs((likelihoods[-1] - likelihoods[-2]) / likelihoods[-2]) < tolerance
 
         @staticmethod
-        @jit(signature_or_function=(float64[:, :], float64[:], float64[:, :, :], float64[:, :]), nopython=True)
+        @jit(
+            signature_or_function=(float64[:, :], float64[:], float64[:, :, :], float64[:, :]),
+            nopython=True,
+        )
         def __gamma(U, pi, psi, gamma):
             """
             Convenience Wrapper for JIT compilation of Gamma Computation (unnormalised)

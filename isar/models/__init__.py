@@ -15,4 +15,4 @@ Author: Michael P. J. Camilleri
 from isar.models.DawidSkene import DawidSkeneIID
 from isar.models.InterSchemaAdapteR import InterSchemaAdapteRIID
 
-__author__ = 'Michael P. J. Camilleri'
+__author__ = "Michael P. J. Camilleri"
