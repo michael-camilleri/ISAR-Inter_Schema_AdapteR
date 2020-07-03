@@ -204,18 +204,21 @@ class DawidSkeneIID(WorkerHandler):
                 ),
                 _args=starts,
             )
-            # Consolidate Data
-            self.Pi = results.Pi
-            self.Psi = results.Psi
             # Stop Main timer
             self.stop_timer("global")
 
-            # Display some statistics
-            self._write(
-                "DS Model was fit in {0:1.5f}s ({1:1.5f}s/run):\n".format(
-                    self.elapsed("global"), self.elapsed("global") / num_work
+            # Check that there was something to return:
+            if results is not None:
+                # Consolidate Data
+                self.Pi = results.Pi
+                self.Psi = results.Psi
+
+                # Display some statistics
+                self._write(
+                    "DS Model was fit in {0:1.5f}s ({1:1.5f}s/run):\n".format(
+                        self.elapsed("global"), self.elapsed("global") / num_work
+                    )
                 )
-            )
 
             # Build (and return) Information Structure
             return (self, results) if return_diagnostics else self
@@ -289,21 +292,31 @@ class DawidSkeneIID(WorkerHandler):
         _final_pis = np.asarray(_final_pis)
         _final_psis = np.asarray(_final_psis)
 
+        # Check that we got something, and if not:
+        if len(_converged) < 1:
+            warnings.warn("The Runs failed completely - The parameters have not been changed.")
+            return None
+
         # Check whether at least one converged, and warn if not...
         if np.any(_converged):
             _masked_likelihood = np.ma.masked_array(_final_llik, np.logical_not(_converged))
         else:
-            warnings.warn("None of the Runs Converged: results may be incomplete")
+            warnings.warn("None of the Runs Converged - Parameters have been updated but may not "
+                          "represent optimal values. It is advised to rerun with a larger maximum "
+                          "number of iterations.")
             _masked_likelihood = _final_llik
 
         # Find the best one out of those converged, or out of all, if none converged
         _best_index = _masked_likelihood.argmax().squeeze()
-        _best_llikel = _final_llik[_best_index]
-        _best_pi = _final_pis[_best_index]
-        _best_psi = _final_psis[_best_index]
 
         # Return Results in Dictionary:
-        return self.DSIIDResult_t(_best_pi, _best_psi, _converged, _best_index, _evol_llikel)
+        return self.DSIIDResult_t(
+            Pi=_final_pis[_best_index],
+            Psi=_final_psis[_best_index],
+            Best=_best_index,
+            Converged=np.asarray(_converged),
+            LLEvolutions=_evol_llikel,
+        )
 
     # ========================== Private Nested Implementations ========================== #
     class _EMWorker(IWorker):
@@ -359,8 +372,8 @@ class DawidSkeneIID(WorkerHandler):
             pi, psi = _data
 
             # Initialise Dirichlets
-            pi_dir = npext.Dirichlet(_common.prior_pi)
-            psi_dir = npext.Dirichlet(_common.prior_psi)
+            pi_dir = npext.Dirichlet(_common.prior_pi, ignore_zeros=False)
+            psi_dir = npext.Dirichlet(_common.prior_psi, ignore_zeros=False)
 
             # Prepare for Loop
             iterations = 0  # Iteration Count
