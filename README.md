@@ -16,7 +16,7 @@ If you find the code useful in any of your projects, please consider citing the 
 
 ## Repository Structure
 
-At the top level, there are two `requirements` files, for easy installation of the necessary packages (except for the custom mpctools library: instructions for this are provided below).
+At the top level, there is a `requirements` file as well as a python setup script, for easy installation of the necessary packages.
 There are 3 high-level directories:
  * **isar**: Contains the classes implementing the two models in our paper, the baseline DS and Extended DS using our ISAR adapter, under the `models` package.
  * **scripts**: Contains the scripts for replicating the results in the paper.
